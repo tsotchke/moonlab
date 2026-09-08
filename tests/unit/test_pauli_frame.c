@@ -215,6 +215,68 @@ static int test_mt_stream_independence(void) {
     return rc;
 }
 
+/* The detector sampler's packed intermediate must be observationally
+ * identical to reducing the public byte measurement record.  This covers
+ * partial words, thread block tails, repeated records, and M(p) boundaries.
+ * The reference parities below are from the noiseless tableau trajectory:
+     * H-M-M has parity 0, reset-M gives 0, each X-M readout gives 1,
+     * and q2 starts in |0>. */
+static int test_packed_detector_regression(void) {
+    const size_t sizes[] = {1, 63, 64, 65, 131, 257};
+    const uint64_t seeds[] = {0, 1, 1234};
+    const int threads[] = {1, 2, 4};
+    pf_circuit_op_t ops[10] = {0};
+    size_t n = 0;
+    ops[n++] = (pf_circuit_op_t){PF_OP_H, 0, 0, 0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_MEASURE_NOISY, 0, 0, .125};
+    ops[n++] = (pf_circuit_op_t){PF_OP_MEASURE, 0, 0, 0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_RESET, 0, 0, 0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_MEASURE, 0, 0, 0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_X, 1, 0, 0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_MEASURE_NOISY, 1, 0, 1.0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_MEASURE, 1, 0, 0};
+    ops[n++] = (pf_circuit_op_t){PF_OP_DEPOLARIZE1, 2, 0, .2};
+    ops[n++] = (pf_circuit_op_t){PF_OP_MEASURE_NOISY, 2, 0, 0.0};
+    /* Reference bits for six records; random records 0/1 occur in pairs. */
+    const uint8_t ref[] = {0, 0, 0, 1, 1, 0};
+    const size_t offsets[] = {0, 2, 3, 4, 5, 9, 9, 12};
+    /* pair, known-0, known-1, second known-1, multi-target, empty,
+     * duplicate index (1^1^4 = 4, whose reference parity is 1). */
+    const uint32_t indices[] = {0, 1, 2, 3, 4, 0, 1, 2, 5, 1, 1, 4};
+    const size_t nd = 7;
+    for (size_t ni = 0; ni < sizeof(sizes) / sizeof(sizes[0]); ni++) {
+        const size_t shots = sizes[ni];
+        const size_t nmeas = pauli_frame_circuit_num_measurements(ops, n);
+        uint8_t *meas = (uint8_t *)malloc(nmeas * shots);
+        uint8_t *det = (uint8_t *)malloc(nd * shots);
+        ASSERT(meas && det, "detector regression allocation");
+        for (size_t si = 0; si < sizeof(seeds) / sizeof(seeds[0]); si++) {
+            for (size_t ti = 0; ti < sizeof(threads) / sizeof(threads[0]); ti++) {
+                ASSERT(pauli_frame_batch_sample_circuit(
+                           3, ops, n, shots, seeds[si], threads[ti], meas) == (long)nmeas,
+                       "measurement sampler failed in detector regression");
+                ASSERT(pauli_frame_batch_sample_detectors(
+                           3, ops, n, offsets, indices, nd, shots,
+                           seeds[si], threads[ti], det) == (long)nd,
+                       "detector sampler failed in detector regression");
+                for (size_t d = 0; d < nd; d++) {
+                    for (size_t s = 0; s < shots; s++) {
+                        uint8_t expected = 0;
+                        for (size_t k = offsets[d]; k < offsets[d + 1]; k++)
+                            expected ^= meas[(size_t)indices[k] * shots + s];
+                        for (size_t k = offsets[d]; k < offsets[d + 1]; k++)
+                            expected ^= ref[indices[k]];
+                        ASSERT(det[d * shots + s] == expected,
+                               "packed detector differs from byte measurement reduction");
+                    }
+                }
+            }
+        }
+        free(meas); free(det);
+    }
+    return 0;
+}
+
 int main(void) {
     if (test_h_swap()             != 0) return 1; fprintf(stderr, "PASS test_h_swap\n");
     if (test_s_phase()            != 0) return 1; fprintf(stderr, "PASS test_s_phase\n");
@@ -223,5 +285,6 @@ int main(void) {
     if (test_batch_cnot()         != 0) return 1; fprintf(stderr, "PASS test_batch_cnot\n");
     if (test_batch_depolarising_rate() != 0) return 1; fprintf(stderr, "PASS test_batch_depolarising_rate\n");
     if (test_mt_stream_independence()  != 0) return 1; fprintf(stderr, "PASS test_mt_stream_independence\n");
+    if (test_packed_detector_regression() != 0) return 1; fprintf(stderr, "PASS test_packed_detector_regression\n");
     return 0;
 }

@@ -561,6 +561,21 @@ static void pf_noise_flip_bytes(uint8_t* dst, size_t S, double p, uint64_t* rng)
     }
 }
 
+/* Packed equivalent of pf_noise_flip_bytes.  It deliberately uses the same
+ * gap sampler and therefore consumes exactly the same RNG draws. */
+static void pf_noise_flip_words(bf_word_t* dst, size_t S, double p, uint64_t* rng) {
+    if (p <= 0.0 || S == 0) return;
+    if (p >= 1.0) { pf_flip_all(dst, S); return; }
+    const double ilq = 1.0 / log1p(-p);
+    long long pos = -1;
+    for (;;) {
+        pos += (long long)pf_next_gap(ilq, rng);
+        if (pos >= (long long)S) return;
+        const size_t s = (size_t)pos;
+        dst[s >> 6] ^= (bf_word_t)1 << (s & 63);
+    }
+}
+
 /* Derive an independent RNG stream for the shot block beginning at
  * absolute shot index `offset`.
  *
@@ -861,7 +876,8 @@ static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
                         const double* chan_args,
                         const uint8_t* m_ref, const uint8_t* m_kind,
                         size_t block_shots, uint64_t seed,
-                        uint8_t* mdst, size_t mstride) {
+                        uint8_t* mdst, size_t mstride,
+                        bf_word_t* mwdst, size_t mwstride) {
     pauli_frame_batch_t* b = pauli_frame_batch_create(n, block_shots);
     if (!b) return -1;
     const size_t W = b->words_per_row;
@@ -893,16 +909,24 @@ static int pf_run_block(size_t n, const pf_circuit_op_t* ops, size_t num_ops,
             case PF_OP_MEASURE_NOISY: {
                 const bf_word_t* xq = row_x(b, q0);
                 const uint8_t mr = m_ref[mi];
-                uint8_t* dst = mdst + (size_t)mi * mstride;
-                for (size_t s = 0; s < block_shots; s++)
-                    dst[s] = (uint8_t)((xq[s >> 6] >> (s & 63)) & 1) ^ mr;
+                if (mwdst) {
+                    bf_word_t* dst = mwdst + (size_t)mi * mwstride;
+                    for (size_t w = 0; w < W; w++)
+                        dst[w] = xq[w] ^ (mr ? ~(bf_word_t)0 : 0);
+                    if (ops[i].kind == PF_OP_MEASURE_NOISY)
+                        pf_noise_flip_words(dst, block_shots, ops[i].p, &rng);
+                } else {
+                    uint8_t* dst = mdst + (size_t)mi * mstride;
+                    for (size_t s = 0; s < block_shots; s++)
+                        dst[s] = (uint8_t)((xq[s >> 6] >> (s & 63)) & 1) ^ mr;
+                    if (ops[i].kind == PF_OP_MEASURE_NOISY)
+                        pf_noise_flip_bytes(dst, block_shots, ops[i].p, &rng);
+                }
                 /* Measurement error flips the REPORTED outcome only: the
                  * frame is untouched, so a repeated measurement of the same
                  * qubit still agrees with the state.  (This is stim's M(p)
                  * semantics, and is what makes a flipped syndrome bit show
                  * up as two detector events rather than one.) */
-                if (ops[i].kind == PF_OP_MEASURE_NOISY)
-                    pf_noise_flip_bytes(dst, block_shots, ops[i].p, &rng);
                 /* A random measurement injects fresh Z-frame entropy so a
                  * later basis change yields an independent outcome; the
                  * X-frame is preserved so downstream deterministic
@@ -996,7 +1020,7 @@ long pauli_frame_batch_sample_circuit_ex(size_t num_qubits,
         if (bs == 0) continue;
         uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
         if (pf_run_block(num_qubits, ops, num_ops, chan_args, m_ref, m_kind,
-                         bs, bseed, out + off, num_shots) != 0)
+                         bs, bseed, out + off, num_shots, NULL, 0) != 0)
             err |= 1;
     }
 
@@ -1076,27 +1100,35 @@ long pauli_frame_batch_sample_detectors_ex(size_t num_qubits,
         size_t off = (size_t)tid * base + ((size_t)tid < rem ? (size_t)tid : rem);
         if (bs == 0) continue;
 
-        /* Block-local measurement buffer: detectors are reduced here, so the
-         * full nmeas x num_shots measurement record is never materialised. */
-        uint8_t* mbuf = (uint8_t*)malloc(nmeas * bs);
+        /* Block-local packed measurement buffer.  Detectors are reduced in
+         * words, then unpacked once into the public byte-oriented output. */
+        const size_t W = (bs + BF_BITS_PER_WORD - 1) / BF_BITS_PER_WORD;
+        uint64_t* mbuf = (uint64_t*)calloc(nmeas * W, sizeof(*mbuf));
         if (!mbuf) { err |= 1; continue; }
         uint64_t bseed = pf_stream_seed(seed, (uint64_t)off);
         if (pf_run_block(num_qubits, ops, num_ops, chan_args, m_ref, m_kind,
-                         bs, bseed, mbuf, bs) != 0) {
+                         bs, bseed, NULL, 0, mbuf, W) != 0) {
             free(mbuf); err |= 1; continue;
         }
+        uint64_t* acc = (uint64_t*)malloc(W * sizeof(*acc));
+        if (!acc) { free(mbuf); err |= 1; continue; }
         for (size_t d = 0; d < num_detectors; d++) {
             uint8_t* dst = out + d * num_shots + off;
             const size_t k0 = det_offsets[d], k1 = det_offsets[d + 1];
             if (k0 == k1) { memset(dst, 0, bs); continue; }
-            const uint8_t* src = mbuf + (size_t)det_indices[k0] * bs;
-            for (size_t s = 0; s < bs; s++) dst[s] = src[s];
+            memcpy(acc, mbuf + (size_t)det_indices[k0] * W,
+                   W * sizeof(*acc));
             for (size_t k = k0 + 1; k < k1; k++) {
-                const uint8_t* m = mbuf + (size_t)det_indices[k] * bs;
-                for (size_t s = 0; s < bs; s++) dst[s] ^= m[s];
+                const uint64_t* m = mbuf + (size_t)det_indices[k] * W;
+                for (size_t w = 0; w < W; w++) acc[w] ^= m[w];
             }
-            if (det_ref[d]) for (size_t s = 0; s < bs; s++) dst[s] ^= 1u;
+            if (det_ref[d]) {
+                for (size_t w = 0; w < W; w++) acc[w] ^= ~(uint64_t)0;
+            }
+            for (size_t s = 0; s < bs; s++)
+                dst[s] = (uint8_t)((acc[s >> 6] >> (s & 63)) & 1);
         }
+        free(acc);
         free(mbuf);
     }
 
