@@ -115,9 +115,8 @@ static void *deadlock_watchdog(void *arg)
         int now = atomic_load(&g_rounds_done);
         unsigned long activity = atomic_load(&g_activity);
         int phase = atomic_load(&g_phase);
-        if (phase != last_phase ||
-            (phase == PHASE_RUNNING &&
-             (now != last || activity != last_activity))) {
+        if (now != last || phase != last_phase ||
+            (phase == PHASE_RUNNING && activity != last_activity)) {
             last = now;
             last_activity = activity;
             last_phase = phase;
@@ -193,8 +192,13 @@ int main(int argc, char **argv)
         fprintf(stdout, "negative control: simulating a stuck destroy phase\n");
         atomic_store(&g_phase, PHASE_DESTROYING);
         pthread_create(&wd, NULL, deadlock_watchdog, (void *)(intptr_t)15);
-        pthread_join(wd, NULL);
-        return 0;
+        /* Keep the heartbeat advancing: activity must not mask a stuck
+         * DESTROYING phase, which is why the watchdog ignores it there. */
+        for (;;) {
+            atomic_fetch_add(&g_activity, 1ul);
+            struct timespec ts = { 0, 1000 * 1000 };
+            nanosleep(&ts, NULL);
+        }
     }
     if (destroy_mode) {
         pthread_t wd;
