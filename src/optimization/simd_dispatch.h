@@ -152,6 +152,9 @@ typedef struct {
 // DETECTION FUNCTIONS
 // ============================================================================
 
+/** Return whether the complete AVX-512 kernel contract is executable now. */
+int simd_runtime_has_avx512(void);
+
 /**
  * @brief Detect all SIMD capabilities
  *
