@@ -29,7 +29,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 2
 
 JOBS="${QSIM_TSAN_JOBS:-2}"
 CC_BIN="${CC:-clang}"
@@ -48,6 +48,23 @@ tsan_options_for_run() { # $1=suppression enabled (0|1)
 
 run_result_is_clean() { # $1=unique race sites, $2=process exit status
     [ "$1" -eq 0 ] && [ "$2" -eq 0 ]
+}
+
+resolve_omp_runtime() {
+    local lib
+    for candidate in "$CC_BIN" clang; do
+        lib="$("$candidate" -print-file-name=libomp.so 2>/dev/null || true)"
+        if [ -n "$lib" ] && [ -f "$lib" ]; then
+            printf '%s\n' "$lib"
+            return 0
+        fi
+        lib="$("$candidate" -print-file-name=libomp.so.1 2>/dev/null || true)"
+        if [ -n "$lib" ] && [ -f "$lib" ]; then
+            printf '%s\n' "$lib"
+            return 0
+        fi
+    done
+    return 1
 }
 
 # The OpenMP grover harness needs a TSan-instrumented (Archer) libomp. On a
@@ -128,15 +145,6 @@ print("\t".join((
 )))
 PY
 )
-
-sha256_file() {
-    python3 - "$1" <<'PY'
-import hashlib
-from pathlib import Path
-import sys
-print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
-PY
-}
 
 write_hash_manifest() { # manifest path, followed by artifact paths
     python3 - "$@" <<'PY'
@@ -283,6 +291,9 @@ fi
 # (libopenblas-dev liblapacke-dev); override with QSIM_TSAN_EXTRA_LIBS.
 if [ "$(uname -s)" != "Darwin" ]; then
     CONC_CMAKE_ARGS+=( -DMOONLAB_EXTRA_LIBS="${QSIM_TSAN_EXTRA_LIBS:-openblas;lapack;lapacke}" )
+    if omp_runtime="$(resolve_omp_runtime)"; then
+        CONC_CMAKE_ARGS+=( -DMOONLAB_OMP_LIB="$omp_runtime" )
+    fi
 fi
 CC="$CC_BIN" CXX="${CXX:-clang++}" cmake "${CONC_CMAKE_ARGS[@]}" \
     >"$LOG_DIR/cfg_conc.log" 2>&1 || { echo "[tsan] harness configure failed; see $LOG_DIR/cfg_conc.log"; exit 2; }
@@ -294,8 +305,6 @@ BIN=build-tsan-conc
 # --- 3. Run harnesses + classify --------------------------------------------
 # distinct_races <logfile>: count unique "SUMMARY: data race" sites.
 distinct_races() { grep "SUMMARY: ThreadSanitizer: data race" "$1" 2>/dev/null | sort -u | wc -l | tr -d ' '; }
-
-json_escape() { sed 's/\\/\\\\/g; s/"/\\"/g' <<<"$1"; }
 
 # The authoritative emit() is defined once near the top of this script: it binds
 # every event to git_head/git_tree/dirty/source_fingerprint so the release

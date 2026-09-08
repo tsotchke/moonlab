@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tarfile
@@ -26,7 +27,9 @@ from validate_release_certificate import (  # noqa: E402
     REQUIRED_RUNTIME_KINDS,
     CertificateError,
     _verdict,
+    _tag_release_evidence_binding,
     source_identity,
+    produce_certificate,
     validate_certificate,
 )
 
@@ -88,10 +91,13 @@ class CertificateFixture:
             self.repo,
             "tag",
             "-a",
-            "v1.2.0",
+            "v1.2.1",
             "-m",
-            "Moonlab v1.2.0\n\nMoonlab-Release-Candidate-Run: 12345\n"
-            f"Moonlab-Release-Candidate-Head: {candidate_head}",
+            "Moonlab v1.2.1\n\nMoonlab-Release-Candidate-Run: 12345\n"
+            f"Moonlab-Release-Candidate-Head: {candidate_head}\n"
+            "Moonlab-Release-Evidence-Branch: release-evidence/v1.2.1\n"
+            f"Moonlab-Release-Evidence-Commit: {'e' * 40}\n"
+            f"Moonlab-Release-Certificate-SHA256: {'f' * 64}",
         )
         self.evidence_root = self.repo / "scripts/icc_traces/release-certificate"
         self.evidence_root.mkdir(parents=True)
@@ -181,7 +187,7 @@ class CertificateFixture:
         }, sort_keys=True) + "\n", encoding="utf-8")
         self.document = {
             "schema": "moonlab.release_certificate.v1",
-            "version": "1.2.0",
+            "version": "1.2.1",
             "generated_at": "2026-07-19T01:00:00Z",
             "source": self.source,
             "icc": {
@@ -197,15 +203,28 @@ class CertificateFixture:
             "mesh": self._mesh(),
             "hosted_ci": {"run": _binding(hosted_run, self.evidence_root)},
             "tag": {
-                "name": "v1.2.0",
+                "name": "v1.2.1",
                 "annotated": True,
-                "object": _run(self.repo, "rev-parse", "refs/tags/v1.2.0"),
                 "target": self.source["git_head"],
                 "candidate_run_id": 12345,
                 "candidate_head": self.source["git_head"],
             },
         }
         self.write()
+        certificate_sha256 = hashlib.sha256(self.certificate_path.read_bytes()).hexdigest()
+        _run(
+            self.repo,
+            "tag",
+            "-a",
+            "-f",
+            "v1.2.1",
+            "-m",
+            "Moonlab v1.2.1\n\nMoonlab-Release-Candidate-Run: 12345\n"
+            f"Moonlab-Release-Candidate-Head: {candidate_head}\n"
+            "Moonlab-Release-Evidence-Branch: release-evidence/v1.2.1\n"
+            f"Moonlab-Release-Evidence-Commit: {'e' * 40}\n"
+            f"Moonlab-Release-Certificate-SHA256: {certificate_sha256}",
+        )
 
     def close(self) -> None:
         self.temporary.cleanup()
@@ -215,6 +234,14 @@ class CertificateFixture:
             json.dumps(self.document, sort_keys=True, separators=(",", ":")) + "\n",
             encoding="utf-8",
         )
+        certificate_sha256 = hashlib.sha256(self.certificate_path.read_bytes()).hexdigest()
+        message = _run(self.repo, "for-each-ref", "--format=%(contents)", "refs/tags/v1.2.1")
+        message = re.sub(
+            r"(?m)^Moonlab-Release-Certificate-SHA256: [0-9a-f]{64}$",
+            f"Moonlab-Release-Certificate-SHA256: {certificate_sha256}",
+            message,
+        )
+        _run(self.repo, "tag", "-a", "-f", "v1.2.1", "-m", message)
 
     def rebind(self, binding: dict, path: Path) -> None:
         binding.clear()
@@ -412,14 +439,14 @@ class CertificateFixture:
         for kind in sorted(REQUIRED_RELEASE_ARTIFACT_KINDS):
             platform, package, pattern = RELEASE_ARTIFACT_SPECS[kind]
             examples = {
-                "wheel-linux-x64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-                "wheel-linux-x64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_x86_64.whl",
-                "wheel-linux-arm64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
-                "wheel-linux-arm64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_aarch64.whl",
-                "wheel-macos-arm64": "moonlab-1.2.0-py3-none-macosx_11_0_arm64.whl",
-                "wheel-macos-x64": "moonlab-1.2.0-py3-none-macosx_10_15_x86_64.whl",
-                "wheel-windows-x64": "moonlab-1.2.0-py3-none-win_amd64.whl",
-                "wheel-windows-arm64": "moonlab-1.2.0-py3-none-win_arm64.whl",
+                "wheel-linux-x64-manylinux": "moonlab-1.2.1-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+                "wheel-linux-x64-musllinux": "moonlab-1.2.1-py3-none-musllinux_1_2_x86_64.whl",
+                "wheel-linux-arm64-manylinux": "moonlab-1.2.1-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+                "wheel-linux-arm64-musllinux": "moonlab-1.2.1-py3-none-musllinux_1_2_aarch64.whl",
+                "wheel-macos-arm64": "moonlab-1.2.1-py3-none-macosx_11_0_arm64.whl",
+                "wheel-macos-x64": "moonlab-1.2.1-py3-none-macosx_10_15_x86_64.whl",
+                "wheel-windows-x64": "moonlab-1.2.1-py3-none-win_amd64.whl",
+                "wheel-windows-arm64": "moonlab-1.2.1-py3-none-win_arm64.whl",
             }
             filename = examples.get(kind)
             if filename is None:
@@ -431,7 +458,7 @@ class CertificateFixture:
                 "kind": kind,
                 "platform": platform,
                 "package": package,
-                "version": "1.2.0",
+                "version": "1.2.1",
                 "file": _binding(path, self.evidence_root),
             })
         return artifacts
@@ -470,7 +497,127 @@ class ReleaseCertificateTests(unittest.TestCase):
 
     def test_complete_certificate_passes(self) -> None:
         document = self.validate()
-        self.assertEqual(document["version"], "1.2.0")
+        self.assertEqual(document["version"], "1.2.1")
+
+    def test_emit_from_prepares_without_a_local_tag(self) -> None:
+        draft = self.fixture.evidence_root / "draft.json"
+        draft.write_text(
+            json.dumps(self.fixture.document, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        _run(self.fixture.repo, "tag", "-d", "v1.2.1")
+        prepared_path = self.fixture.evidence_root / "prepared.json"
+        prepared = produce_certificate(
+            draft,
+            prepared_path,
+            self.fixture.repo,
+            self.fixture.icc_index,
+        )
+        self.assertEqual(prepared["tag"]["annotated"], True)
+        self.assertNotIn("object", prepared["tag"])
+        self.assertEqual(prepared["tag"]["candidate_run_id"], 12345)
+        self.assertEqual(prepared["tag"]["candidate_head"], self.fixture.source["git_head"])
+
+    def test_tag_evidence_binding_is_exact_and_unique(self) -> None:
+        self.assertEqual(
+            _tag_release_evidence_binding(self.fixture.repo, "v1.2.1"),
+            (
+                "release-evidence/v1.2.1",
+                "e" * 40,
+                hashlib.sha256(self.fixture.certificate_path.read_bytes()).hexdigest(),
+            ),
+        )
+
+    def test_final_tag_certificate_digest_must_match_exact_bytes(self) -> None:
+        self.fixture.write()
+        _run(
+            self.fixture.repo,
+            "tag",
+            "-a",
+            "-f",
+            "v1.2.1",
+            "-m",
+            "Moonlab v1.2.1\n\nMoonlab-Release-Candidate-Run: 12345\n"
+            f"Moonlab-Release-Candidate-Head: {self.fixture.source['git_head']}\n"
+            "Moonlab-Release-Evidence-Branch: release-evidence/v1.2.1\n"
+            f"Moonlab-Release-Evidence-Commit: {'e' * 40}\n"
+            f"Moonlab-Release-Certificate-SHA256: {'f' * 64}",
+        )
+        with self.assertRaisesRegex(CertificateError, "certificate digest"):
+            self.validate()
+
+    def test_v121_runtime_lanes_require_their_exact_event_contracts(self) -> None:
+        self.assertEqual(
+            EXPECTED_EVENTS["seeded_shots"],
+            {"local_bit_replay", "protocol_fuzz_clean", "cross_host_bit_replay"},
+        )
+        self.assertEqual(
+            EXPECTED_EVENTS["quantum_annealing"],
+            {"rk4_oracle", "qubo_ising_parity", "abi_080", "binding_parity", "asan_ubsan_clean"},
+        )
+        self.assertEqual(
+            EXPECTED_EVENTS["eshkol_compatibility"],
+            {"eshkol_v134_quantum_consumer"},
+        )
+        for kind in ("seeded_shots", "quantum_annealing"):
+            entry = self.fixture.entry(kind)
+            self.assertEqual(entry["assertions"]["expected_event_names"], sorted(EXPECTED_EVENTS[kind]))
+            records = self.fixture.records(entry)
+            self.assertEqual({record["name"] for record in records}, EXPECTED_EVENTS[kind])
+
+    def test_runtime_producer_event_sets_match_the_validator_contract(self) -> None:
+        def script(path: str) -> str:
+            return (ROOT / path).read_text(encoding="utf-8")
+
+        oracle_text = script("scripts/run_moonlab_oracles.sh")
+        oracle_events = set(
+            re.findall(r'^\s*"[^|]+\|[^|]+\|([a-z][a-z0-9_]+)"', oracle_text, re.MULTILINE)
+        )
+        oracle_events.update(
+            re.findall(r'"name":"([a-z][a-z0-9_]+)"', oracle_text)
+        )
+        self.assertEqual(oracle_events, EXPECTED_EVENTS["oracles"])
+
+        tsan_text = script("scripts/run_tsan.sh")
+        tsan_events = set(re.findall(r'"([a-z][a-z0-9_]+)\|[01]\|', tsan_text))
+        tsan_events.update(re.findall(r'regress "([a-z][a-z0-9_]+)"', tsan_text))
+        tsan_events.update(
+            re.findall(r'emit\s+"([a-z][a-z0-9_]+)"\s+"(?:PASS|FAIL|SKIP)"', tsan_text)
+        )
+        self.assertEqual(tsan_events, EXPECTED_EVENTS["tsan"])
+
+        seeded_local = script("scripts/run_seeded_shots_local_gate.sh")
+        seeded_mesh = script("scripts/run_seeded_shots_mesh_gate.sh")
+        seeded_events = set(re.findall(r'\bemit\s+([a-z][a-z0-9_]+)', seeded_local))
+        seeded_events.update(re.findall(r'"name"\s*:\s*"([a-z][a-z0-9_]+)"', seeded_mesh))
+        self.assertEqual(seeded_events, EXPECTED_EVENTS["seeded_shots"])
+
+        annealing_text = script("scripts/run_quantum_annealing_gate.sh")
+        annealing_events = set(re.findall(r'\bemit\s+([a-z][a-z0-9_]+)', annealing_text))
+        self.assertEqual(annealing_events, EXPECTED_EVENTS["quantum_annealing"])
+
+        eshkol_scripts = sorted(
+            path for path in (ROOT / "scripts").glob("*eshkol*") if path.is_file()
+        )
+        if not eshkol_scripts:
+            self.skipTest("eshkol compatibility producer is supplied by a separate task")
+        eshkol_text = "\n".join(path.read_text(encoding="utf-8") for path in eshkol_scripts)
+        eshkol_events = set(
+            re.findall(r'"name"\s*:\s*"(eshkol_[a-z0-9_]+)"', eshkol_text)
+        )
+        self.assertEqual(eshkol_events, EXPECTED_EVENTS["eshkol_compatibility"])
+
+        release_smoke_text = script("scripts/run_moonlab_release_smoke.sh")
+        release_smoke_events = set(
+            re.findall(r'\bemit\s+([a-z][a-z0-9_]+)\s+(?:PASS|FAIL)', release_smoke_text)
+        )
+        release_smoke_events.update(
+            re.findall(r'check_ctest_gate\s+([a-z][a-z0-9_]+)', release_smoke_text)
+        )
+        release_smoke_events.update(
+            re.findall(r'check_deep_hunt\s+\S+\s+([a-z][a-z0-9_]+)', release_smoke_text)
+        )
+        self.assertEqual(release_smoke_events, EXPECTED_EVENTS["release_smoke"])
 
     def test_dirty_source_is_rejected(self) -> None:
         (self.fixture.repo / "dirty.txt").write_text("dirty\n", encoding="utf-8")
@@ -580,14 +727,14 @@ class ReleaseCertificateTests(unittest.TestCase):
 
     def test_tag_target_mismatch_is_rejected(self) -> None:
         self.fixture.document["tag"]["target"] = "a" * 40
-        self.assert_rejected("tag assertion")
+        self.assert_rejected("candidate/tag identity")
 
     def test_structured_lane_values_are_carried_by_an_authoritative_status(self) -> None:
         entry = self.fixture.entry("differential")
         records = self.fixture.records(entry)
         self.assertTrue(any(isinstance(record["value"], dict) for record in records))
         document = self.validate()
-        self.assertEqual(document["version"], "1.2.0")
+        self.assertEqual(document["version"], "1.2.1")
 
     def test_structured_lane_value_alone_is_not_a_passing_verdict(self) -> None:
         for structured in ({"checks": 65, "failed": 0}, [{"checks": 65}], []):
@@ -628,7 +775,7 @@ class ReleaseCertificateTests(unittest.TestCase):
         self.fixture.write_bundle(profile_id, self.fixture.hosted_bundle_entries(profile_id))
         self.fixture.write()
         document = self.validate()
-        self.assertEqual(document["version"], "1.2.0")
+        self.assertEqual(document["version"], "1.2.1")
 
     def test_unsafe_bundle_members_are_still_rejected(self) -> None:
         def directory(name: str) -> tuple[tarfile.TarInfo, None]:

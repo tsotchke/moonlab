@@ -1,7 +1,7 @@
 # MoonLab documentation
 
-**Current release:** 1.2.0 (2026-07-18)
-**Stable C ABI:** 0.6.0
+**Current release:** 1.2.1 (2026-08-22)
+**Stable C ABI:** 0.8.0
 **Supported release platforms:** Linux x86-64/ARM64, macOS Apple
 Silicon/Intel, and Windows x64/ARM64
 
@@ -16,7 +16,7 @@ documents that describe the current build, API, architecture, and operations.
 | Build and run a first circuit | [Getting started](getting-started.md) |
 | Build or consume MoonLab on Windows | [Windows guide](WINDOWS.md) |
 | Understand CI and release artifacts | [CI/CD pipelines](CI_CD.md) |
-| See what changed in 1.2.0 | [v1.2.0 release notes](release/v1.2.0-release-notes.md) |
+| See what changed in 1.2.1 | [v1.2.1 release notes](release/v1.2.1-release-notes.md) |
 | Use the supported binary interface | [Stable ABI](STABLE_ABI.md) |
 | Choose build flags | [Configuration options](reference/configuration-options.md) |
 | Understand the implementation | [Architecture](../ARCHITECTURE.md) |
@@ -24,11 +24,13 @@ documents that describe the current build, API, architecture, and operations.
 
 ## Current v1.2 surface
 
-MoonLab 1.2 adds bounded CUDA/MPI sharding beyond 32 qubits, promotes the
-binding-consumed public surface under hidden visibility, and advances the
-stable ABI to 0.6.0. States created with `quantum_state_create_gpu()` retain the
-same gate API used by CPU states, while distributed gates exchange bounded
-chunks rather than allocating full remote shards.
+MoonLab 1.2.1 retains bounded CUDA/MPI sharding beyond 32 qubits and adds
+attributable seeded SHOTS over wire protocol 1.1 plus logical closed-system
+Ising/QUBO quantum annealing. The stable ABI is 0.8.0, with matching Python,
+Rust, and JavaScript/WASM annealing surfaces. States created with
+`quantum_state_create_gpu()` retain the same gate API used by CPU states,
+while distributed gates exchange bounded chunks rather than allocating full
+remote shards.
 
 The distributable CPU library remains the broad compatibility target. Official
 release archives are built with native-CPU tuning disabled and contain the

@@ -99,6 +99,23 @@ typedef struct {
 } moonlab_qrng_status_abi_t;
 typedef int (*moonlab_qrng_get_status_fn)(moonlab_qrng_status_abi_t* status);
 
+/* Layout mirror of moonlab_anneal_summary_v1.  This test deliberately does
+ * not include the producer header: it behaves like a downstream dlsym client. */
+typedef struct {
+    uint64_t effective_seed;
+    uint64_t best_bitstring;
+    uint64_t most_likely_bitstring;
+    uint64_t ground_bitstring;
+    size_t ground_degeneracy;
+    double best_energy;
+    double ground_energy;
+    double expected_energy;
+    double success_probability;
+    double residual_energy;
+    double problem_gap;
+    double final_norm;
+} moonlab_anneal_summary_v1;
+
 static const char* const LIB_CANDIDATES[] = {
 #if defined(_WIN32)
     "libquantumsim.dll",
@@ -330,6 +347,11 @@ static int test_version(void* h) {
     if (major < 0 || minor < 0 || patch < 0) {
         fprintf(stderr, "moonlab_abi_version returned negative components: "
                         "%d.%d.%d\n", major, minor, patch);
+        return 1;
+    }
+    if (major != 0 || minor != 8 || patch != 0) {
+        fprintf(stderr, "moonlab_abi_version = %d.%d.%d, expected 0.8.0\n",
+                major, minor, patch);
         return 1;
     }
     fprintf(stdout, "ABI version: %d.%d.%d\n", major, minor, patch);
@@ -1443,6 +1465,72 @@ int main(void) {
                 }
             }
             free(ek); free(dk); free(ct);
+        }
+    }
+
+    /* Quantum annealing (ABI 0.8.0): resolve both stable one-shots and pin
+     * deterministic summary semantics on analytic one- and two-bit models. */
+    ABI_STEP("quantum annealing");
+    {
+        typedef int (*anneal_ising_fn)(
+            size_t, const double*, const double*, double,
+            double, size_t, size_t, uint64_t, int,
+            double, double, int, moonlab_anneal_summary_v1*,
+            uint64_t*, double*);
+        typedef int (*anneal_qubo_fn)(
+            size_t, const double*, double,
+            double, size_t, size_t, uint64_t, int,
+            double, double, int, moonlab_anneal_summary_v1*,
+            uint64_t*, double*);
+        anneal_ising_fn anneal_ising =
+            (anneal_ising_fn)dlsym(h, "moonlab_anneal_ising_v1");
+        anneal_qubo_fn anneal_qubo =
+            (anneal_qubo_fn)dlsym(h, "moonlab_anneal_qubo_v1");
+        if (!anneal_ising || !anneal_qubo) {
+            fprintf(stderr, "dlsym quantum annealing one-shots failed\n");
+            failures++;
+        } else {
+            const double h1[1] = {-1.0}, J1[1] = {0.0};
+            moonlab_anneal_summary_v1 s1;
+            uint64_t samples1[64];
+            double energies1[64];
+            const uint64_t seed = UINT64_C(0x123456789abcdef0);
+            int rc = anneal_ising(1, h1, J1, 0.0, 12.0, 1200, 64,
+                                  seed, 2, 1.0, 1.0, 1,
+                                  &s1, samples1, energies1);
+            if (rc != 0 || s1.effective_seed != seed ||
+                fabs(s1.ground_energy + 1.0) > 1e-12 ||
+                s1.success_probability < 0.98 ||
+                fabs(s1.final_norm - 1.0) > 1e-10 ||
+                energies1[0] < s1.ground_energy - 1e-12) {
+                fprintf(stderr,
+                        "moonlab_anneal_ising_v1 rc=%d seed=%llx E0=%.12g "
+                        "p=%.12g norm=%.12g\n",
+                        rc, (unsigned long long)s1.effective_seed,
+                        s1.ground_energy, s1.success_probability, s1.final_norm);
+                failures++;
+            }
+
+            const double Q[4] = {-1.0, 1.0, 1.0, -1.0};
+            moonlab_anneal_summary_v1 sq;
+            uint64_t samplesq[128];
+            double energiesq[128];
+            rc = anneal_qubo(2, Q, 1.0, 12.0, 1200, 128,
+                             seed, 2, 1.0, 1.0, 1,
+                             &sq, samplesq, energiesq);
+            if (rc != 0 || sq.ground_degeneracy != 2 ||
+                fabs(sq.ground_energy) > 1e-12 ||
+                fabs(sq.problem_gap - 1.0) > 1e-12 ||
+                fabs(sq.best_energy) > 1e-12) {
+                fprintf(stderr,
+                        "moonlab_anneal_qubo_v1 rc=%d deg=%zu E0=%.12g "
+                        "gap=%.12g best=%.12g\n",
+                        rc, sq.ground_degeneracy, sq.ground_energy,
+                        sq.problem_gap, sq.best_energy);
+                failures++;
+            } else {
+                fprintf(stdout, "quantum annealing one-shots OK\n");
+            }
         }
     }
 

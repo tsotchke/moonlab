@@ -2,6 +2,17 @@
 
 WebAssembly + WebGPU bindings for the Moonlab quantum simulator.
 
+The v1.2.1 binding includes the real C quantum-annealing engine:
+
+```ts
+import { annealQubo } from '@tsotchkecorp/moonlab';
+
+const result = await annealQubo([-1, 1, 1, -1], 1, {
+  totalTime: 12, numSteps: 1200, numSamples: 128,
+  seed: 0x123456789abcdef0n,
+});
+```
+
 ## Build
 
 The Wasm artefact is produced by Emscripten compiling the C core under

@@ -2,7 +2,7 @@
 # Matches GitHub Actions ubuntu-22.04 environment
 FROM ubuntu:22.04
 
-ARG VERSION=1.2.0
+ARG VERSION=1.2.1
 LABEL org.opencontainers.image.version="${VERSION}"
 ENV DEBIAN_FRONTEND=noninteractive
 

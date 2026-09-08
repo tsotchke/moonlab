@@ -142,6 +142,61 @@ static void test_partial_trace_bell_to_maximally_mixed(void) {
     quantum_state_free(&s);
 }
 
+static void test_partial_trace_preserves_complex_phase(void) {
+    fprintf(stdout, "\n-- partial trace preserves complex phase convention --\n");
+    quantum_state_t s;
+    quantum_state_init(&s, 2);
+
+    const double inv_sqrt_two = 1.0 / sqrt(2.0);
+    s.amplitudes[0] = inv_sqrt_two;
+    s.amplitudes[1] = I * inv_sqrt_two;
+
+    complex_t reduced[4] = {0};
+    int trace_out[] = {1};
+    qs_error_t err = quantum_state_partial_trace(&s, trace_out, 1, reduced);
+    CHECK(err == QS_SUCCESS, "complex-phase partial_trace returns success");
+
+    /* For (|0> + i|1>)/sqrt(2), rho_01 = -i/2 and rho_10 = +i/2. */
+    CHECK(close(creal(reduced[1]), 0.0, 1e-12) &&
+          close(cimag(reduced[1]), -0.5, 1e-12),
+          "rho_A[0,1] = -i/2 (got %.3g%+.3gi)",
+          creal(reduced[1]), cimag(reduced[1]));
+    CHECK(close(creal(reduced[2]), 0.0, 1e-12) &&
+          close(cimag(reduced[2]), 0.5, 1e-12),
+          "rho_A[1,0] = +i/2 (got %.3g%+.3gi)",
+          creal(reduced[2]), cimag(reduced[2]));
+
+    quantum_state_free(&s);
+}
+
+static void test_rejects_duplicate_subsystem_indices(void) {
+    fprintf(stdout, "\n-- duplicate subsystem indices are rejected --\n");
+    quantum_state_t s;
+    quantum_state_init(&s, 3);
+    gate_hadamard(&s, 0);
+    gate_cnot(&s, 0, 1);
+
+    int duplicate[] = {0, 0};
+    complex_t reduced[16] = {0};
+    uint64_t reduced_dim = 0;
+
+    double entropy = quantum_state_entanglement_entropy(&s, duplicate, 2);
+    CHECK(close(entropy, 0.0, 1e-12),
+          "entanglement entropy rejects a duplicate subsystem");
+
+    qs_error_t partial_err = quantum_state_partial_trace(
+        &s, duplicate, 2, reduced);
+    CHECK(partial_err == QS_ERROR_INVALID_PARAM,
+          "state partial_trace rejects duplicate qubits");
+
+    int entanglement_err = entanglement_reduced_density_matrix(
+        &s, duplicate, 2, reduced, &reduced_dim);
+    CHECK(entanglement_err == -1,
+          "entanglement partial trace rejects duplicate qubits");
+
+    quantum_state_free(&s);
+}
+
 int main(void) {
     fprintf(stdout, "=== entanglement subsystem tests ===\n");
     test_product_state_zero_entropy();
@@ -149,6 +204,8 @@ int main(void) {
     test_fidelity_identical_and_orthogonal();
     test_purity_of_pure_states();
     test_partial_trace_bell_to_maximally_mixed();
+    test_partial_trace_preserves_complex_phase();
+    test_rejects_duplicate_subsystem_indices();
     fprintf(stdout, "\n=== %d failure%s ===\n",
             failures, failures == 1 ? "" : "s");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

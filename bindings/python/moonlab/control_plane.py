@@ -197,24 +197,71 @@ def submit_circuit_shots(host: str,
                          circuit_text: str,
                          num_shots: int,
                          timeout: Optional[float] = 30.0,
-                         secret: Optional[Union[bytes, str]] = None) -> List[int]:
-    """Submit a moonlab-circuit v1 payload requesting `num_shots`
-    measurement samples instead of the full probability vector.
+                         secret: Optional[Union[bytes, str]] = None,
+                         seed: Optional[int] = None) -> List[int]:
+    """Submit a circuit and return integer bitstring outcomes.
 
-    Returns a list of integer bitstring outcomes -- bit 0 is qubit 0,
-    bit 1 is qubit 1, ...  Use ``outcome & (1 << k)`` to test qubit k.
+    ``seed`` is an optional non-zero uint64 (since v1.2.1).  When set,
+    independent servers return byte-identical outcomes for the same circuit,
+    shot count, and seed.  The server echoes the effective seed and this
+    helper verifies the echo before accepting the body.
 
-    Wire format: ``SHOTS <num_shots> <bytes>\\n<circuit-text>`` ->
-    ``SAMPLES <num_shots>\\n<num_shots * 8-byte LE uint64>``.
-    Since v0.8.12 (Python) / v0.8.11 (C server).
+    Use :func:`submit_circuit_shots_with_seed` when the server-assigned seed
+    must be retained for later replay.
     """
+    outcomes, _ = _submit_circuit_shots_full(
+        host, port, circuit_text, num_shots, timeout, secret, seed,
+        require_seed_reply=seed is not None,
+    )
+    return outcomes
+
+
+def submit_circuit_shots_with_seed(
+        host: str,
+        port: int,
+        circuit_text: str,
+        num_shots: int,
+        timeout: Optional[float] = 30.0,
+        secret: Optional[Union[bytes, str]] = None,
+        seed: Optional[int] = None) -> tuple[List[int], int]:
+    """Submit shots and return ``(outcomes, effective_seed)``.
+
+    ``seed=None`` asks the server to assign a clock-derived seed; a non-zero
+    uint64 requests an exact replay seed.  This function requires a v1.1
+    ``SAMPLES ... seed=<hex64>`` response and fails closed if an older server
+    accepted but ignored the seed token.
+    """
+    return _submit_circuit_shots_full(
+        host, port, circuit_text, num_shots, timeout, secret, seed,
+        require_seed_reply=True,
+    )
+
+
+def _submit_circuit_shots_full(
+        host: str,
+        port: int,
+        circuit_text: str,
+        num_shots: int,
+        timeout: Optional[float],
+        secret: Optional[Union[bytes, str]],
+        seed: Optional[int],
+        require_seed_reply: bool) -> tuple[List[int], int]:
     if num_shots <= 0 or num_shots > (1 << 20):
         raise ControlPlaneError(
             f"num_shots {num_shots} out of range [1, 2^20]"
         )
+    if seed is not None and (
+            not isinstance(seed, int) or isinstance(seed, bool) or
+            seed <= 0 or seed > ((1 << 64) - 1)):
+        raise ControlPlaneError(
+            f"seed {seed!r} out of range [1, 2^64-1]"
+        )
 
     encoded = circuit_text.encode("utf-8")
-    verb_line = f"SHOTS {num_shots} {len(encoded)}\n".encode("ascii")
+    seed_token = f" seed={seed:016x}" if seed is not None else ""
+    verb_line = (
+        f"SHOTS {num_shots} {len(encoded)}{seed_token}\n".encode("ascii")
+    )
 
     with socket.create_connection((host, port), timeout=timeout) as sock:
         if secret is not None:
@@ -227,7 +274,18 @@ def submit_circuit_shots(host: str,
         resp_hdr = _recv_until_newline(sock)
         if resp_hdr.startswith("SAMPLES "):
             try:
-                shots_back = int(resp_hdr[len("SAMPLES "):].strip())
+                fields = resp_hdr.strip().split()
+                if len(fields) not in (2, 3) or fields[0] != "SAMPLES":
+                    raise ValueError("wrong SAMPLES field count")
+                shots_back = int(fields[1])
+                effective_seed = 0
+                if len(fields) == 3:
+                    if (not fields[2].startswith("seed=") or
+                            len(fields[2]) != len("seed=") + 16):
+                        raise ValueError("malformed seed token")
+                    effective_seed = int(fields[2][len("seed="):], 16)
+                    if effective_seed == 0:
+                        raise ValueError("zero effective seed")
             except ValueError as e:
                 raise ControlPlaneError(
                     f"malformed SAMPLES header: {resp_hdr!r}"
@@ -236,9 +294,18 @@ def submit_circuit_shots(host: str,
                 raise ControlPlaneError(
                     f"implausible shots_back {shots_back}"
                 )
+            if require_seed_reply and effective_seed == 0:
+                raise ControlPlaneError(
+                    f"server omitted effective seed: {resp_hdr!r}"
+                )
+            if seed is not None and effective_seed != seed:
+                raise ControlPlaneError(
+                    f"server seed mismatch: requested {seed:016x}, "
+                    f"received {effective_seed:016x}"
+                )
             raw = _recv_exact(sock, shots_back * 8)
             outcomes = struct.unpack(f"<{shots_back}Q", raw)
-            return list(outcomes)
+            return list(outcomes), effective_seed
         elif resp_hdr.startswith("ERR "):
             raise ControlPlaneError(f"server rejected: {resp_hdr.strip()}")
         else:

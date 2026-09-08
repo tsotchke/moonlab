@@ -17,6 +17,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import {
   submitCircuit,
   submitShots,
+  submitShotsWithSeed,
   submitHealth,
   submitMetrics,
   ControlPlaneError,
@@ -236,6 +237,48 @@ describe('control-plane Node client', () => {
         circuitText: 'whatever', numShots: 1000,
       });
       expect(counts).toEqual([500, 0, 0, 500]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('submitShotsWithSeed sends and verifies the exact uint64 seed', async () => {
+    let observed = '';
+    const seed = 0x0123_4567_89ab_cdefn;
+    const server = await spinFakeServer(async (sock) => {
+      observed = (await readUntilNewline(sock)).toString('ascii');
+      const buf = Buffer.alloc(16);
+      buf.writeBigUInt64LE(0n, 0);
+      buf.writeBigUInt64LE(3n, 8);
+      sock.write('SAMPLES 2 seed=0123456789abcdef\n');
+      sock.write(buf);
+      sock.end();
+    });
+    try {
+      const result = await submitShotsWithSeed({
+        host: '127.0.0.1', port: server.port,
+        circuitText: 'whatever', numShots: 2, seed,
+      });
+      expect(observed).toContain('seed=0123456789abcdef\n');
+      expect(result.effectiveSeed).toBe(seed);
+      expect(result.outcomes).toEqual([0, 3]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('seeded SHOTS fails closed when an old server omits the seed echo', async () => {
+    const server = await spinFakeServer(async (sock) => {
+      await readUntilNewline(sock);
+      sock.write('SAMPLES 1\n');
+      sock.write(Buffer.alloc(8));
+      sock.end();
+    });
+    try {
+      await expect(submitShotsWithSeed({
+        host: '127.0.0.1', port: server.port,
+        circuitText: 'whatever', numShots: 1, seed: 1n,
+      })).rejects.toMatchObject({ name: 'ControlPlaneError' });
     } finally {
       await server.close();
     }

@@ -23,6 +23,10 @@
  *                                  0 / -1 / -2 / -3.
  *
  * The asserts below are the actual test oracle: a return value outside
+ *   - `moonlab_anneal_qubo_v1` -- bounded full-matrix QUBO, schedule and
+ *                                  retained-sample output buffers.
+ *
+ * The asserts below are the actual test oracle: a return value outside
  * the documented set aborts the process and surfaces as a finding.
  */
 
@@ -30,6 +34,7 @@
 
 #include "applications/moonlab_export.h"
 #include "algorithms/vqe.h"
+#include "algorithms/quantum_annealing.h"
 #include "utils/quantum_entropy.h"
 
 #include <assert.h>
@@ -188,15 +193,55 @@ static void fuzz_vqe(const uint8_t **p, const uint8_t *end)
     free(grad);
 }
 
+/* ---- moonlab_anneal_qubo_v1 ------------------------------------------- */
+
+static void fuzz_anneal(const uint8_t **p, const uint8_t *end)
+{
+    const size_t n = 1u + (fuzz_u8(p, end) % 5u);
+    double Q[25] = {0};
+    for (size_t i = 0; i < n * n; i++) {
+        Q[i] = (double)(int8_t)fuzz_u8(p, end) / 8.0;
+    }
+    const size_t steps = 1u + (fuzz_u8(p, end) % 32u);
+    const size_t samples = 1u + (fuzz_u8(p, end) % 16u);
+    const int schedule = (int)(fuzz_u8(p, end) % 5u);
+    const uint64_t seed = ((uint64_t)fuzz_u32(p, end) << 32) |
+                          (uint64_t)fuzz_u32(p, end);
+    uint64_t sample_bits[16] = {0};
+    double sample_energy[16] = {0};
+    moonlab_anneal_summary_v1 summary;
+
+    assert(moonlab_anneal_qubo_v1(
+        n, Q, 0.0, 1.0, steps, samples, seed, schedule,
+        1.0, 1.0, 1, NULL, sample_bits, sample_energy) ==
+        MOONLAB_ANNEAL_BAD_ARG);
+
+    int rc = moonlab_anneal_qubo_v1(
+        n, Q, 0.0, 1.0, steps, samples, seed, schedule,
+        1.0, 1.0, 1, &summary, sample_bits, sample_energy);
+    assert(rc == MOONLAB_ANNEAL_OK || rc == MOONLAB_ANNEAL_BAD_ARG ||
+           rc == MOONLAB_ANNEAL_OOM || rc == MOONLAB_ANNEAL_STATE_ERROR ||
+           rc == MOONLAB_ANNEAL_SCHEDULE_ERROR);
+    if (schedule > MOONLAB_ANNEAL_SCHEDULE_COSINE) {
+        assert(rc == MOONLAB_ANNEAL_SCHEDULE_ERROR);
+    } else if (rc == MOONLAB_ANNEAL_OK) {
+        assert(summary.final_norm > 0.999999 && summary.final_norm < 1.000001);
+        assert(summary.success_probability >= 0.0 &&
+               summary.success_probability <= 1.000001);
+        assert(summary.best_energy >= summary.ground_energy - 1e-10);
+    }
+}
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
     const uint8_t *p   = data;
     const uint8_t *end = data + size;
 
-    switch (fuzz_u8(&p, end) % 3u) {
+    switch (fuzz_u8(&p, end) % 4u) {
     case 0: fuzz_qrng(&p, end);   break;
     case 1: fuzz_ca_mps(&p, end); break;
-    default: fuzz_vqe(&p, end);   break;
+    case 2: fuzz_vqe(&p, end);    break;
+    default: fuzz_anneal(&p, end); break;
     }
     return 0;
 }

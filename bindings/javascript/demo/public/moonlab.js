@@ -2610,6 +2610,8 @@ var _moonlab_tdvp_history_num_steps = Module['_moonlab_tdvp_history_num_steps'] 
 var _moonlab_tdvp_history_get_step = Module['_moonlab_tdvp_history_get_step'] = makeInvalidEarlyAccess('_moonlab_tdvp_history_get_step');
 var _moonlab_tdvp_history_get_bond_chi = Module['_moonlab_tdvp_history_get_bond_chi'] = makeInvalidEarlyAccess('_moonlab_tdvp_history_get_bond_chi');
 var _moonlab_tdvp_engine_free = Module['_moonlab_tdvp_engine_free'] = makeInvalidEarlyAccess('_moonlab_tdvp_engine_free');
+var _moonlab_anneal_ising_v1 = Module['_moonlab_anneal_ising_v1'] = makeInvalidEarlyAccess('_moonlab_anneal_ising_v1');
+var _moonlab_anneal_qubo_v1 = Module['_moonlab_anneal_qubo_v1'] = makeInvalidEarlyAccess('_moonlab_anneal_qubo_v1');
 var _moonlab_libirrep_available = Module['_moonlab_libirrep_available'] = makeInvalidEarlyAccess('_moonlab_libirrep_available');
 var _moonlab_libirrep_kagome12_e0 = Module['_moonlab_libirrep_kagome12_e0'] = makeInvalidEarlyAccess('_moonlab_libirrep_kagome12_e0');
 var _moonlab_libirrep_heisenberg_sector_e0 = Module['_moonlab_libirrep_heisenberg_sector_e0'] = makeInvalidEarlyAccess('_moonlab_libirrep_heisenberg_sector_e0');
@@ -2747,6 +2749,7 @@ var __emscripten_stack_restore = makeInvalidEarlyAccess('__emscripten_stack_rest
 var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc');
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 var dynCall_iiii = makeInvalidEarlyAccess('dynCall_iiii');
+var dynCall_viiiii = makeInvalidEarlyAccess('dynCall_viiiii');
 var dynCall_viii = makeInvalidEarlyAccess('dynCall_viii');
 var dynCall_vdii = makeInvalidEarlyAccess('dynCall_vdii');
 var dynCall_v = makeInvalidEarlyAccess('dynCall_v');
@@ -3061,6 +3064,8 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['moonlab_tdvp_history_get_step'] != 'undefined', 'missing Wasm export: moonlab_tdvp_history_get_step');
   assert(typeof wasmExports['moonlab_tdvp_history_get_bond_chi'] != 'undefined', 'missing Wasm export: moonlab_tdvp_history_get_bond_chi');
   assert(typeof wasmExports['moonlab_tdvp_engine_free'] != 'undefined', 'missing Wasm export: moonlab_tdvp_engine_free');
+  assert(typeof wasmExports['moonlab_anneal_ising_v1'] != 'undefined', 'missing Wasm export: moonlab_anneal_ising_v1');
+  assert(typeof wasmExports['moonlab_anneal_qubo_v1'] != 'undefined', 'missing Wasm export: moonlab_anneal_qubo_v1');
   assert(typeof wasmExports['moonlab_libirrep_available'] != 'undefined', 'missing Wasm export: moonlab_libirrep_available');
   assert(typeof wasmExports['moonlab_libirrep_kagome12_e0'] != 'undefined', 'missing Wasm export: moonlab_libirrep_kagome12_e0');
   assert(typeof wasmExports['moonlab_libirrep_heisenberg_sector_e0'] != 'undefined', 'missing Wasm export: moonlab_libirrep_heisenberg_sector_e0');
@@ -3198,6 +3203,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['_emscripten_stack_alloc'] != 'undefined', 'missing Wasm export: _emscripten_stack_alloc');
   assert(typeof wasmExports['emscripten_stack_get_current'] != 'undefined', 'missing Wasm export: emscripten_stack_get_current');
   assert(typeof wasmExports['dynCall_iiii'] != 'undefined', 'missing Wasm export: dynCall_iiii');
+  assert(typeof wasmExports['dynCall_viiiii'] != 'undefined', 'missing Wasm export: dynCall_viiiii');
   assert(typeof wasmExports['dynCall_viii'] != 'undefined', 'missing Wasm export: dynCall_viii');
   assert(typeof wasmExports['dynCall_vdii'] != 'undefined', 'missing Wasm export: dynCall_vdii');
   assert(typeof wasmExports['dynCall_v'] != 'undefined', 'missing Wasm export: dynCall_v');
@@ -3508,6 +3514,8 @@ function assignWasmExports(wasmExports) {
   _moonlab_tdvp_history_get_step = Module['_moonlab_tdvp_history_get_step'] = createExportWrapper('moonlab_tdvp_history_get_step', 5);
   _moonlab_tdvp_history_get_bond_chi = Module['_moonlab_tdvp_history_get_bond_chi'] = createExportWrapper('moonlab_tdvp_history_get_bond_chi', 4);
   _moonlab_tdvp_engine_free = Module['_moonlab_tdvp_engine_free'] = createExportWrapper('moonlab_tdvp_engine_free', 1);
+  _moonlab_anneal_ising_v1 = Module['_moonlab_anneal_ising_v1'] = createExportWrapper('moonlab_anneal_ising_v1', 15);
+  _moonlab_anneal_qubo_v1 = Module['_moonlab_anneal_qubo_v1'] = createExportWrapper('moonlab_anneal_qubo_v1', 14);
   _moonlab_libirrep_available = Module['_moonlab_libirrep_available'] = createExportWrapper('moonlab_libirrep_available', 0);
   _moonlab_libirrep_kagome12_e0 = Module['_moonlab_libirrep_kagome12_e0'] = createExportWrapper('moonlab_libirrep_kagome12_e0', 1);
   _moonlab_libirrep_heisenberg_sector_e0 = Module['_moonlab_libirrep_heisenberg_sector_e0'] = createExportWrapper('moonlab_libirrep_heisenberg_sector_e0', 9);
@@ -3645,6 +3653,7 @@ function assignWasmExports(wasmExports) {
   __emscripten_stack_alloc = wasmExports['_emscripten_stack_alloc'];
   _emscripten_stack_get_current = wasmExports['emscripten_stack_get_current'];
   dynCall_iiii = dynCalls['iiii'] = createExportWrapper('dynCall_iiii', 4);
+  dynCall_viiiii = dynCalls['viiiii'] = createExportWrapper('dynCall_viiiii', 6);
   dynCall_viii = dynCalls['viii'] = createExportWrapper('dynCall_viii', 4);
   dynCall_vdii = dynCalls['vdii'] = createExportWrapper('dynCall_vdii', 4);
   dynCall_v = dynCalls['v'] = createExportWrapper('dynCall_v', 1);
@@ -3943,7 +3952,7 @@ Module['allocFloat64Array'] = function(length) {
  * Version info
  */
 Module['version'] = {
-  core: '1.2.0',
+  core: '1.2.1',
   wasm: true
 };
 // end include: post.js

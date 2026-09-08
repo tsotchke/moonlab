@@ -44,6 +44,7 @@ One JSON object per direction.
 | `verb`     | yes                | `CIRCUIT` / `SHOTS` / `HEALTH` / `METRICS` |
 | `circuit`  | for CIRCUIT/SHOTS  | moonlab-circuit v1 text                    |
 | `shots`    | for SHOTS          | positive int                               |
+| `seed`     | optional for SHOTS | 1..16 hex digits; canonicalized to uint64 |
 | `secret`   | optional           | HMAC-SHA3-256 shared secret (hex or utf-8) |
 
 ### Reply envelope
@@ -55,6 +56,7 @@ One JSON object per direction.
 | `message`  | string | ERR / HEALTH path  |
 | `probs`    | number[]| CIRCUIT OK        |
 | `counts`   | number[]| SHOTS OK          |
+| `seed`     | string | SHOTS OK effective 16-digit hex seed |
 | `body`     | string | METRICS OK        |
 
 ## Tests

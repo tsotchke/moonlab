@@ -291,6 +291,45 @@ static int control_max_qubits(void)
     return cap;
 }
 
+/* Parse exactly 16 hexadecimal digits.  Keeping the token fixed-width makes
+ * the signed/authenticated verb line canonical and prevents permissive
+ * strtoull/sscanf tails from being silently ignored. */
+static int parse_seed_hex64(const char *text, uint64_t *out)
+{
+    if (!text || !out) return 0;
+    uint64_t value = 0;
+    for (size_t i = 0; i < 16; i++) {
+        const unsigned char c = (unsigned char)text[i];
+        unsigned digit;
+        if (c >= '0' && c <= '9') digit = (unsigned)(c - '0');
+        else if (c >= 'a' && c <= 'f') digit = (unsigned)(c - 'a') + 10u;
+        else if (c >= 'A' && c <= 'F') digit = (unsigned)(c - 'A') + 10u;
+        else return 0;
+        value = (value << 4) | (uint64_t)digit;
+    }
+    *out = value;
+    return 1;
+}
+
+/* Assign a non-zero seed before execution so the exact value can be logged
+ * and returned to the client.  The counter disambiguates requests landing in
+ * the same clock tick; the splitmix64 finalizer removes obvious structure.
+ * This is a sampling seed, not a cryptographic key. */
+static uint64_t control_assigned_seed(void)
+{
+    static _Atomic uint64_t sequence = 0;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    uint64_t x = ((uint64_t)ts.tv_sec << 32) ^ (uint64_t)ts.tv_nsec;
+    x ^= (uint64_t)(unsigned long)getpid() << 16;
+    x ^= atomic_fetch_add_explicit(&sequence, 1, memory_order_relaxed)
+         + 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    x ^= x >> 31;
+    return x ? x : 0x9e3779b97f4a7c15ULL;
+}
+
 static int handle_one_request(moonlab_io_t              *io,
                               const uint8_t             *secret,
                               size_t                     secret_len,
@@ -302,6 +341,7 @@ static int handle_one_request(moonlab_io_t              *io,
     int          log_n_qubits   = -1;
     long         log_body_bytes = -1;
     long         log_shots      = 0;
+    char         log_seed[17]    = "-";
     int          log_rc         = MOONLAB_CONTROL_OK;
     /* peer_cn suffix for the log line.  Pre-baked into a stack buffer
      * once so the macro doesn't need to know about TLS conditionally. */
@@ -350,15 +390,17 @@ static int handle_one_request(moonlab_io_t              *io,
             fprintf(stderr,                                           \
                 "{\"event\":\"moonlab.control\",\"verb\":\"%s\","     \
                 "\"n_qubits\":%d,\"body\":%ld,\"shots\":%ld,"         \
+                "\"seed\":\"%s\","                                      \
                 "\"wall_ms\":%.2f,\"rc\":%d%s}\n",                    \
                 log_verb, log_n_qubits, log_body_bytes, log_shots,    \
-                dt, log_rc, log_peer_suffix);                         \
+                log_seed, dt, log_rc, log_peer_suffix);               \
         } else {                                                      \
             fprintf(stderr,                                           \
                 "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
+                " seed=%s"                                           \
                 " wall_ms=%.2f rc=%d%s\n",                            \
                 log_verb, log_n_qubits, log_body_bytes, log_shots,    \
-                dt, log_rc, log_peer_suffix);                         \
+                log_seed, dt, log_rc, log_peer_suffix);               \
         }                                                             \
         fflush(stderr);                                               \
     }                                                                 \
@@ -376,15 +418,17 @@ static int handle_one_request(moonlab_io_t              *io,
             fprintf(stderr,                                           \
                 "{\"event\":\"moonlab.control\",\"verb\":\"%s\","     \
                 "\"n_qubits\":%d,\"body\":%ld,\"shots\":%ld,"         \
+                "\"seed\":\"%s\","                                      \
                 "\"wall_ms\":%.2f,\"rc\":%d%s}\n",                    \
                 log_verb, log_n_qubits, log_body_bytes, log_shots,    \
-                dt, log_rc, log_peer_suffix);                         \
+                log_seed, dt, log_rc, log_peer_suffix);               \
         } else {                                                      \
             fprintf(stderr,                                           \
                 "[moonlab.control] verb=%s n_qubits=%d body=%ld shots=%ld" \
+                " seed=%s"                                           \
                 " wall_ms=%.2f rc=%d%s\n",                            \
                 log_verb, log_n_qubits, log_body_bytes, log_shots,    \
-                dt, log_rc, log_peer_suffix);                         \
+                log_seed, dt, log_rc, log_peer_suffix);               \
         }                                                             \
         fflush(stderr);                                               \
     }                                                                 \
@@ -586,6 +630,8 @@ static int handle_one_request(moonlab_io_t              *io,
     int  mode_shots = 0;
     long num_shots  = 0;
     long body_bytes = -1;
+    uint64_t requested_seed = 0;
+    int      has_requested_seed = 0;
 
     if (strncmp(hdr, "CIRCUIT ", 8) == 0) {
         log_verb = "CIRCUIT";
@@ -598,9 +644,28 @@ static int handle_one_request(moonlab_io_t              *io,
     } else if (strncmp(hdr, "SHOTS ", 6) == 0) {
         log_verb = "SHOTS";
         atomic_fetch_add(&g_count_shots, 1);
-        if (sscanf(hdr + 6, "%ld %ld", &num_shots, &body_bytes) != 2) {
+        int parsed = 0;
+        if (sscanf(hdr + 6, "%ld %ld%n", &num_shots, &body_bytes,
+                   &parsed) != 2) {
             send_err(io, MOONLAB_CONTROL_PROTOCOL,
-                     "expected SHOTS <shots> <bytes>");
+                     "expected SHOTS <shots> <bytes> [seed=<hex64>]");
+            LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
+        }
+        const char *tail = hdr + 6 + parsed;
+        if (strcmp(tail, "\n") == 0) {
+            /* Legacy clock-seeded form. */
+        } else if (strncmp(tail, " seed=", 6) == 0 &&
+                   strlen(tail + 6) == 17 && tail[22] == '\n' &&
+                   parse_seed_hex64(tail + 6, &requested_seed)) {
+            if (requested_seed == 0) {
+                send_err(io, MOONLAB_CONTROL_BAD_ARG,
+                         "explicit seed must be nonzero");
+                LOG_AND_RETURN(MOONLAB_CONTROL_BAD_ARG);
+            }
+            has_requested_seed = 1;
+        } else {
+            send_err(io, MOONLAB_CONTROL_PROTOCOL,
+                     "expected SHOTS <shots> <bytes> [seed=<hex64>]");
             LOG_AND_RETURN(MOONLAB_CONTROL_PROTOCOL);
         }
         if (num_shots <= 0 || num_shots > MOONLAB_CONTROL_MAX_SHOTS) {
@@ -689,7 +754,10 @@ static int handle_one_request(moonlab_io_t              *io,
     memset(&opts, 0, sizeof(opts));
     if (mode_shots) {
         opts.num_shots = (int)num_shots;
-        opts.rng_seed  = 0; /* clock-based */
+        opts.rng_seed  = has_requested_seed
+            ? requested_seed : control_assigned_seed();
+        snprintf(log_seed, sizeof(log_seed), "%016llx",
+                 (unsigned long long)opts.rng_seed);
     } else {
         opts.return_probabilities = 1;
     }
@@ -736,8 +804,10 @@ static int handle_one_request(moonlab_io_t              *io,
             send_err(io, MOONLAB_CONTROL_REJECTED, "no outcomes");
             LOG_AND_RETURN(MOONLAB_CONTROL_REJECTED);
         }
-        char ok_hdr[64];
-        int hn = snprintf(ok_hdr, sizeof(ok_hdr), "SAMPLES %d\n", res.num_shots);
+        char ok_hdr[96];
+        int hn = snprintf(ok_hdr, sizeof(ok_hdr),
+                          "SAMPLES %d seed=%016llx\n", res.num_shots,
+                          (unsigned long long)opts.rng_seed);
         if (hn < 0 || (size_t)hn >= sizeof(ok_hdr)) {
             moonlab_qgtl_results_free(&res);
             LOG_AND_RETURN(MOONLAB_CONTROL_IO_ERROR);
@@ -1934,13 +2004,16 @@ int moonlab_control_submit_circuit_auth_tenant(const char    *host,
     }
 }
 
-int moonlab_control_submit_circuit_shots(const char *host,
-                                         uint16_t    port,
-                                         const char *circuit_text,
-                                         size_t      text_len,
-                                         int         num_shots,
-                                         uint64_t  **out_outcomes,
-                                         size_t     *out_num)
+static int control_submit_circuit_shots_impl(const char *host,
+                                             uint16_t    port,
+                                             const char *circuit_text,
+                                             size_t      text_len,
+                                             int         num_shots,
+                                             uint64_t    rng_seed,
+                                             int         require_seed_reply,
+                                             uint64_t  **out_outcomes,
+                                             size_t     *out_num,
+                                             uint64_t   *out_effective_seed)
 {
     if (!host || !circuit_text || !out_outcomes || !out_num ||
         num_shots <= 0 || num_shots > MOONLAB_CONTROL_MAX_SHOTS) {
@@ -1948,6 +2021,7 @@ int moonlab_control_submit_circuit_shots(const char *host,
     }
     *out_outcomes = NULL;
     *out_num      = 0;
+    if (out_effective_seed) *out_effective_seed = 0;
 
     if (text_len == 0) text_len = strlen(circuit_text);
     if (text_len == 0) return MOONLAB_CONTROL_BAD_ARG;
@@ -1958,8 +2032,16 @@ int moonlab_control_submit_circuit_shots(const char *host,
     plain_io.fd = fd;
 
     char hdr[96];
-    int hn = snprintf(hdr, sizeof(hdr), "SHOTS %d %zu\n",
+    int hn;
+    if (rng_seed != 0) {
+        hn = snprintf(hdr, sizeof(hdr),
+                      "SHOTS %d %zu seed=%016llx\n",
+                      num_shots, text_len,
+                      (unsigned long long)rng_seed);
+    } else {
+        hn = snprintf(hdr, sizeof(hdr), "SHOTS %d %zu\n",
                       num_shots, text_len);
+    }
     if (hn < 0 || (size_t)hn >= sizeof(hdr)) {
         close(fd);
         return MOONLAB_CONTROL_IO_ERROR;
@@ -1977,8 +2059,28 @@ int moonlab_control_submit_circuit_shots(const char *host,
 
     if (strncmp(resp_hdr, "SAMPLES ", 8) == 0) {
         long shots_back = 0;
-        if (sscanf(resp_hdr + 8, "%ld", &shots_back) != 1 ||
+        int parsed = 0;
+        if (sscanf(resp_hdr + 8, "%ld%n", &shots_back, &parsed) != 1 ||
             shots_back <= 0 || shots_back > MOONLAB_CONTROL_MAX_SHOTS) {
+            close(fd);
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+        uint64_t effective_seed = 0;
+        int has_seed_reply = 0;
+        const char *tail = resp_hdr + 8 + parsed;
+        if (strcmp(tail, "\n") == 0) {
+            /* Pre-v1.1 response; allowed only for the legacy client. */
+        } else if (strncmp(tail, " seed=", 6) == 0 &&
+                   strlen(tail + 6) == 17 && tail[22] == '\n' &&
+                   parse_seed_hex64(tail + 6, &effective_seed) &&
+                   effective_seed != 0) {
+            has_seed_reply = 1;
+        } else {
+            close(fd);
+            return MOONLAB_CONTROL_PROTOCOL;
+        }
+        if ((require_seed_reply && !has_seed_reply) ||
+            (rng_seed != 0 && effective_seed != rng_seed)) {
             close(fd);
             return MOONLAB_CONTROL_PROTOCOL;
         }
@@ -1989,11 +2091,40 @@ int moonlab_control_submit_circuit_shots(const char *host,
         if (rc != MOONLAB_CONTROL_OK) { free(buf); return rc; }
         *out_outcomes = buf;
         *out_num      = (size_t)shots_back;
+        if (out_effective_seed) *out_effective_seed = effective_seed;
         return MOONLAB_CONTROL_OK;
     } else {
         close(fd);
         return MOONLAB_CONTROL_REJECTED;
     }
+}
+
+int moonlab_control_submit_circuit_shots(const char *host,
+                                         uint16_t    port,
+                                         const char *circuit_text,
+                                         size_t      text_len,
+                                         int         num_shots,
+                                         uint64_t  **out_outcomes,
+                                         size_t     *out_num)
+{
+    return control_submit_circuit_shots_impl(
+        host, port, circuit_text, text_len, num_shots,
+        0, 0, out_outcomes, out_num, NULL);
+}
+
+int moonlab_control_submit_circuit_shots_seeded(const char *host,
+                                                uint16_t    port,
+                                                const char *circuit_text,
+                                                size_t      text_len,
+                                                int         num_shots,
+                                                uint64_t    rng_seed,
+                                                uint64_t  **out_outcomes,
+                                                size_t     *out_num,
+                                                uint64_t   *out_effective_seed)
+{
+    return control_submit_circuit_shots_impl(
+        host, port, circuit_text, text_len, num_shots,
+        rng_seed, 1, out_outcomes, out_num, out_effective_seed);
 }
 
 #ifdef MOONLAB_HAVE_TLS

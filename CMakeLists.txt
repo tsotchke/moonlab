@@ -758,6 +758,7 @@ set(QSIM_ALGORITHMS_SOURCES
     src/algorithms/quantum_rng.c
     src/algorithms/bell_tests.c
     src/algorithms/qaoa.c
+    src/algorithms/quantum_annealing.c
     src/algorithms/qpe.c
     src/algorithms/vqe.c
     src/algorithms/h2_sto3g.c
@@ -933,6 +934,7 @@ set(QSIM_APPLICATIONS_SOURCES
     src/applications/moonlab_export_lean.c
     src/applications/moonlab_tdvp_export.c
     src/applications/moonlab_vqe_export.c
+    src/applications/moonlab_anneal_export.c
     src/applications/moonlab_qgtl_backend.c
     src/applications/decoder_bench.c
     src/applications/mwpm_exact.c
@@ -1736,6 +1738,8 @@ endif()
 
 if(QSIM_BUILD_TESTS)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tests.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantum_annealing_tests.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/seeded_shots_tests.cmake)
     # Adversarial suites use POSIX sockets/pthreads, a numpy-generated corpus,
     # and libc math corners that clang-cl/UCRT does not provide; they are
     # Linux/macOS dev+CI tools, not part of the shipped Windows artifact (which

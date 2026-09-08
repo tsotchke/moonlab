@@ -26,6 +26,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.linux_text = (ROOT / ".github/workflows/linux-compatibility.yml").read_text(
             encoding="utf-8"
         )
+        cls.smoke_text = (ROOT / "scripts/run_moonlab_release_smoke.sh").read_text(
+            encoding="utf-8"
+        )
         cls.release = yaml.safe_load(cls.release_text)
         cls.linux = yaml.safe_load(cls.linux_text)
 
@@ -34,6 +37,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertRegex(self.release_text, r"(?m)^  push:$")
         self.assertIn("candidate-seal", self.release["jobs"])
         self.assertIn("promotion-verify", self.release["jobs"])
+
+    def test_v121_certificate_is_required_before_publication(self) -> None:
+        self.assertIn('"this workflow is the strict v1.2.1 release path;', self.release_text)
+        verifier = self.release["jobs"]["release-certificate-verify"]
+        self.assertIn("promotion-verify", verifier["needs"])
+        self.assertEqual(verifier["permissions"]["actions"], "read")
+        self.assertEqual(verifier["permissions"]["contents"], "read")
+        self.assertIn("moonlab-v1.2.1-release-certificate.json", str(verifier))
+        self.assertIn("release-evidence/v1.2.1", str(verifier))
+        self.assertIn("git fetch --no-tags origin", str(verifier))
+        self.assertIn("git archive --format=tar", str(verifier))
+        self.assertIn("linux-portability-aggregate", str(verifier))
+        self.assertIn("materialize_release_evidence.py", str(verifier))
+        self.assertIn("promotion/candidate", str(verifier))
+        self.assertIn("promotion/portability", str(verifier))
+        self.assertIn("certificate_sha256", str(verifier))
+        self.assertIn("validate_release_certificate.py", str(verifier))
+        readiness = self.release["jobs"]["publication-readiness"]
+        self.assertIn("release-certificate-verify", readiness["needs"])
 
     def test_candidate_builders_cannot_publish(self) -> None:
         self.assertEqual(self.release["permissions"]["contents"], "read")
@@ -139,6 +161,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
             *(f"linux-compatibility / {name}" for name in REQUIRED_HOSTED_LINUX_JOBS),
         }
         self.assertEqual(exact, set(REQUIRED_HOSTED_RAW_JOBS))
+
+    def test_release_smoke_is_safe_from_an_isolated_candidate_worktree(self) -> None:
+        self.assertIn('ICC_REPO="${MOONLAB_ICC_REPO:-moonlab}"', self.smoke_text)
+        self.assertIn('phantom-api --repo "$ICC_REPO"', self.smoke_text)
+        self.assertIn('odr-audit --repo "$ICC_REPO"', self.smoke_text)
+        self.assertIn("-DQSIM_BUILD_BENCHMARKS=OFF", self.smoke_text)
+        self.assertIn("-DQSIM_BUILD_EXAMPLES=OFF", self.smoke_text)
 
 
 if __name__ == "__main__":

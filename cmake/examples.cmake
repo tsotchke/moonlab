@@ -145,6 +145,11 @@
     add_executable(qaoa_maxcut examples/applications/qaoa_maxcut.c)
     target_link_libraries(qaoa_maxcut PRIVATE quantumsim)
 
+    add_executable(quantum_annealing_demo
+        examples/applications/quantum_annealing_demo.c)
+    target_link_libraries(quantum_annealing_demo PRIVATE
+        quantumsim ${MATH_LIBRARY})
+
     add_executable(portfolio_optimization examples/applications/portfolio_optimization.c)
     target_link_libraries(portfolio_optimization PRIVATE quantumsim)
 
@@ -332,6 +337,8 @@
                  COMMAND vqe_h2_molecule)
         add_test(NAME example_qaoa_maxcut
                  COMMAND qaoa_maxcut)
+        add_test(NAME example_quantum_annealing
+                 COMMAND quantum_annealing_demo)
         add_test(NAME example_grover_hash_collision
                  COMMAND grover_hash_collision)
         add_test(NAME example_quantum_spin_chain_small
@@ -354,6 +361,7 @@
         set_tests_properties(
             example_vqe_h2_molecule
             example_qaoa_maxcut
+            example_quantum_annealing
             example_grover_hash_collision
             example_quantum_spin_chain_small
             example_phase3_phase4_benchmark
@@ -373,6 +381,7 @@
         qsim_label_tests(examples
             example_vqe_h2_molecule
             example_qaoa_maxcut
+            example_quantum_annealing
             example_grover_hash_collision
             example_quantum_spin_chain_small
             example_phase3_phase4_benchmark

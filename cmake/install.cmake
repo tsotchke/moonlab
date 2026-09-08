@@ -188,7 +188,8 @@ if(NOT QSIM_PYTHON_WHEEL)
         configure_file(
             ${CMAKE_CURRENT_SOURCE_DIR}/cmake/quantumsim.pc.in
             ${CMAKE_CURRENT_BINARY_DIR}/quantumsim.pc.install
-            @ONLY)")
+            @ONLY)"
+        COMPONENT native-sdk)
 endif()
 
 # Capture the source revision and feature set in an installed build-info header.

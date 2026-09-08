@@ -33,7 +33,8 @@
  * Chern / Z2 topology one-shots, the pointwise band geometry,
  * Clifford-Assisted MPS, DMRG scalar energies, variational-D, the 1+1D Z2
  * lattice-gauge builder, adaptive two-site TDVP, the exact VQE gradient
- * and its quantum geometry, and the status stringifier.
+ * and its quantum geometry, complete Ising/QUBO quantum annealing, and the
+ * status stringifier.
  * `tests/abi/test_moonlab_export_abi.c` dlopens the library and resolves
  * plus smokes this surface exactly as a downstream consumer does. On Linux it
  * also closes and reopens the library repeatedly, verifies process residency,
@@ -41,6 +42,8 @@
  *
  * VERSION HISTORY
  * ---------------
+ *  - 0.8.0  Complete closed-system transverse-field quantum annealing for
+ *           Ising and full-matrix QUBO inputs (`moonlab_anneal_*_v1`).
  *  - 0.7.0  VQE quantum geometry (`moonlab_vqe_qgt`,
  *           `moonlab_vqe_berry_curvature`,
  *           `moonlab_vqe_natural_gradient`) and the pointwise band
@@ -122,7 +125,7 @@ _Static_assert(sizeof(moonlab_complex_double) == 2 * sizeof(double),
  * package version. Consumers should check (major, minor) and refuse to
  * bind if they require a newer minor than the installed library. */
 #define MOONLAB_ABI_VERSION_MAJOR 0
-#define MOONLAB_ABI_VERSION_MINOR 7
+#define MOONLAB_ABI_VERSION_MINOR 8
 #define MOONLAB_ABI_VERSION_PATCH 0
 
 /**
@@ -1496,6 +1499,64 @@ MOONLAB_API int moonlab_qwz_curvature_at(double m, const double* k,
 MOONLAB_API int moonlab_haldane_curvature_at(double t1, double t2, double phi,
                                              double m_stagger, const double* k,
                                              double* g_out, double* omega_out);
+
+/* ---- Quantum annealing one-shots (stable from ABI 0.8.0) ----------- */
+
+/** Versioned, pointer-passed summary for the stable annealing ABI. */
+typedef struct {
+    uint64_t effective_seed;
+    uint64_t best_bitstring;
+    uint64_t most_likely_bitstring;
+    uint64_t ground_bitstring;
+    size_t ground_degeneracy;
+    double best_energy;
+    double ground_energy;
+    double expected_energy;
+    double success_probability;
+    double residual_energy;
+    double problem_gap;
+    double final_norm;
+} moonlab_anneal_summary_v1;
+
+/**
+ * @brief Anneal a symmetric Ising model and return a complete summary.
+ *
+ * Evolves @f$H(s)=-A(s)\sum_iX_i+B(s)H_P@f$ from @f$|+\rangle^n@f$
+ * using second-order product-formula steps. @p J is a symmetric row-major
+ * @p num_qubits by @p num_qubits matrix with zero diagonal. Schedule values:
+ * 0 linear, 1 quadratic, 2 cosine. A zero seed is assigned and reported.
+ *
+ * @return 0 success; -1 invalid input; -2 allocation failure; -3 evolution
+ * failure; -4 invalid schedule.
+ * @param summary_out Required summary output.
+ * @param samples_out Optional buffer of at least @p num_samples uint64 values.
+ * @param sample_energies_out Optional buffer of at least @p num_samples doubles.
+ * @since 1.2.1 (ABI 0.8.0)
+ * @stability stable
+ */
+MOONLAB_API int moonlab_anneal_ising_v1(
+    size_t num_qubits, const double* h, const double* J, double offset,
+    double total_time, size_t num_steps, size_t num_samples, uint64_t seed,
+    int schedule, double driver_strength, double problem_strength,
+    int second_order, moonlab_anneal_summary_v1* summary_out,
+    uint64_t* samples_out, double* sample_energies_out);
+
+/**
+ * @brief Anneal @f$E(x)=x^TQx+offset@f$ and return a complete summary.
+ *
+ * @p Q is the full row-major matrix; asymmetric off-diagonal entries are
+ * combined exactly. Other parameters and return codes match
+ * ::moonlab_anneal_ising_v1.
+ * Optional sample buffers, when non-NULL, require @p num_samples entries.
+ * @since 1.2.1 (ABI 0.8.0)
+ * @stability stable
+ */
+MOONLAB_API int moonlab_anneal_qubo_v1(
+    size_t num_variables, const double* Q, double offset,
+    double total_time, size_t num_steps, size_t num_samples, uint64_t seed,
+    int schedule, double driver_strength, double problem_strength,
+    int second_order, moonlab_anneal_summary_v1* summary_out,
+    uint64_t* samples_out, double* sample_energies_out);
 
 /* ---- Diagnostic stringifier (stable from 0.2.1) -------------------- */
 

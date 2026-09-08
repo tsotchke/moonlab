@@ -68,6 +68,8 @@ python test_moonlab.py
   with native reverse-mode autograd (adjoint-method gradient) for the
   hardware-efficient ansatz in noise-free simulation
 - **QAOA** - Quantum optimization (MaxCut, Ising models)
+- **Quantum annealing** - Exact logical transverse-field Ising and full-QUBO
+  evolution with deterministic samples and ground-state diagnostics
 - **Grover** - Quantum search algorithm
 - **Bell Tests** - CHSH, Mermin (3-qubit GHZ), and Mermin-Klyshko
   N-qubit nonlocality inequalities
@@ -276,6 +278,20 @@ print(f"Best cut: {bin(result['best_bitstring'])}")
 print(f"Cut value: {result['best_cost']}")
 ```
 
+### Quantum Annealing (QUBO)
+
+```python
+from moonlab.annealing import AnnealConfig, anneal_qubo
+
+result = anneal_qubo(
+    [[-1.0, 1.0], [1.0, -1.0]], offset=1.0,
+    config=AnnealConfig(total_time=12, num_steps=1200,
+                        num_samples=128, seed=0x123456789abcdef0),
+)
+print(result.best_bitstring, result.best_energy,
+      result.success_probability)
+```
+
 ### Few-Shot Learning
 
 ```python
@@ -408,7 +424,7 @@ This library implements algorithms from the following foundational works:
 
 ## Historical: what shipped in v0.3.0
 
-This package is currently at **v1.2.0** (stable ABI **0.6.0**); see
+This package is currently at **v1.2.1** (stable ABI **0.8.0**); see
 `CHANGELOG.md` at the repo root and `docs/PARITY_MATRIX.md` for the
 full v0.4-v1.1 history, including the v1.1 GPU (CUDA) state API,
 control-plane job scheduling, and QRNG status surface added since the
@@ -452,4 +468,4 @@ worked examples.
 
 ---
 
-*Current release: v1.2.0 (ABI 0.6.0)*
+*Current release: v1.2.1 (ABI 0.8.0)*

@@ -14,6 +14,7 @@ Request envelope::
     { "verb":    "CIRCUIT" | "SHOTS" | "HEALTH" | "METRICS",
       "circuit": "<moonlab-circuit-v1 text>",
       "shots":   <int>,             // SHOTS verb only
+      "seed":    "<16 hex digits>", // optional SHOTS replay seed (v1.2.1)
       "secret":  "<hex-bytes>",     // optional HMAC-SHA3 shared secret
       "tenant":  "<tenant_id>"      // optional tenant identifier (v1.0.3);
                                      // requires `secret`; charset [A-Za-z0-9_.-],
@@ -31,6 +32,7 @@ Reply envelope::
       "message": "<str>",
       "probs":   [<float>, ...],     // CIRCUIT path
       "counts":  [<int>, ...],       // SHOTS path
+      "seed":    "<16 hex digits>", // effective SHOTS seed
       "body":    "<str>"             // METRICS path
     }
 
@@ -160,8 +162,8 @@ def _line_submit(target_host: str, target_port: int, timeout: float,
 
         if head_verb in ("OK", "SAMPLES", "METRICS"):
             try:
-                n = int(remainder)
-            except ValueError:
+                n = int(remainder.split()[0])
+            except (ValueError, IndexError):
                 return head_verb, b"", remainder
             body_bytes = _recv_exact(s, n if head_verb == "METRICS" else n * 8, rest)
             return head_verb, body_bytes, remainder
@@ -183,6 +185,32 @@ def _parse_secret(raw: Any) -> bytes | None:
     if isinstance(raw, list):
         return bytes(raw)
     raise ValueError(f"unsupported secret type: {type(raw).__name__}")
+
+
+def _parse_seed(raw: Any) -> str | None:
+    """Return a canonical 16-digit non-zero uint64 hex token.
+
+    Browser callers should send a string because JSON numbers cannot exactly
+    represent all uint64 values.  Integer input is accepted for non-browser
+    clients and tests.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        raise ValueError("seed must be a uint64, not bool")
+    if isinstance(raw, int):
+        value = raw
+    elif isinstance(raw, str):
+        text = raw.removeprefix("0x").removeprefix("0X")
+        if not (1 <= len(text) <= 16) or any(
+                c not in "0123456789abcdefABCDEF" for c in text):
+            raise ValueError("seed must contain 1..16 hexadecimal digits")
+        value = int(text, 16)
+    else:
+        raise ValueError(f"unsupported seed type: {type(raw).__name__}")
+    if value <= 0 or value > ((1 << 64) - 1):
+        raise ValueError("seed out of range [1, 2^64-1]")
+    return f"{value:016x}"
 
 
 def _handle_circuit(target: tuple[str, int], timeout: float, req: dict) -> dict:
@@ -208,11 +236,13 @@ def _handle_shots(target: tuple[str, int], timeout: float, req: dict) -> dict:
     shots = int(req.get("shots", 0))
     if shots <= 0:
         return {"status": "ERR", "code": -400, "message": "shots must be > 0"}
-    body = text.encode("utf-8")
-    secret = _parse_secret(req.get("secret"))
-    tenant = req.get("tenant")
-    verb = f"SHOTS {shots} {len(body)}\n".encode("ascii")
     try:
+        body = text.encode("utf-8")
+        secret = _parse_secret(req.get("secret"))
+        tenant = req.get("tenant")
+        seed = _parse_seed(req.get("seed"))
+        seed_token = f" seed={seed}" if seed is not None else ""
+        verb = f"SHOTS {shots} {len(body)}{seed_token}\n".encode("ascii")
         head, payload, rest = _line_submit(
             target[0], target[1], timeout, verb, body, secret, tenant)
     except ValueError as e:
@@ -220,7 +250,27 @@ def _handle_shots(target: tuple[str, int], timeout: float, req: dict) -> dict:
     if head == "SAMPLES":
         num = len(payload) // 8
         counts = list(struct.unpack(f"<{num}Q", payload))
-        return {"status": "OK", "code": 0, "counts": counts}
+        fields = rest.split()
+        effective_seed = None
+        if len(fields) == 2 and fields[1].startswith("seed="):
+            try:
+                effective_seed = _parse_seed(fields[1][len("seed="):])
+            except ValueError:
+                effective_seed = None
+        if effective_seed is None:
+            return {
+                "status": "ERR", "code": -404,
+                "message": "control plane omitted/malformed SHOTS seed",
+            }
+        if seed is not None and effective_seed != seed:
+            return {
+                "status": "ERR", "code": -404,
+                "message": "control plane returned a different SHOTS seed",
+            }
+        return {
+            "status": "OK", "code": 0, "counts": counts,
+            "seed": effective_seed,
+        }
     return _err_reply(head, rest)
 
 

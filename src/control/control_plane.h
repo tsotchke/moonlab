@@ -61,6 +61,12 @@ extern "C" {
 #define MOONLAB_CONTROL_RATE_LIMITED  (-408) /**< client tripped per-IP rate limit. */
 #define MOONLAB_CONTROL_SERVER_BUSY   (-409) /**< server at concurrent-cap; try again later. */
 
+/** Control-plane line-protocol version.  v1.1 adds attributable SHOTS
+ * requests: an optional 64-bit seed on the request and the effective seed in
+ * the SAMPLES response header. */
+#define MOONLAB_CONTROL_PROTOCOL_VERSION_MAJOR 1
+#define MOONLAB_CONTROL_PROTOCOL_VERSION_MINOR 1
+
 /**
  * @brief Run a single-shot, blocking control-plane server on
  *        `host`:`port`.  Returns after one client interaction, or
@@ -132,6 +138,38 @@ moonlab_control_submit_circuit_shots(const char *host,
                                      int         num_shots,
                                      uint64_t  **out_outcomes,
                                      size_t     *out_num);
+
+/**
+ * @brief Submit a SHOTS request with an attributable reproducibility seed.
+ *
+ * The v1.1 wire form is
+ * `SHOTS <shots> <bytes> seed=<16 lowercase hex digits>`.  A non-zero
+ * @p rng_seed requests that exact seed.  Passing zero preserves clock-based
+ * assignment, but the server still returns the effective non-zero seed in
+ * `SAMPLES <shots> seed=<hex64>` so the run can be replayed.
+ *
+ * This entry point fails with MOONLAB_CONTROL_PROTOCOL if the peer omits the
+ * seed from its response (for example, a pre-v1.1 server that accepted but
+ * ignored the additive request token).  The legacy
+ * moonlab_control_submit_circuit_shots() remains source/ABI compatible and
+ * accepts both old and new response headers.
+ *
+ * @param[out] out_effective_seed  Effective server seed on success.  May be
+ *                                NULL when the caller already knows the seed.
+ * @return MOONLAB_CONTROL_OK on success or a negative code.
+ * @stability beta
+ * @since 1.2.1
+ */
+MOONLAB_API int
+moonlab_control_submit_circuit_shots_seeded(const char *host,
+                                            uint16_t    port,
+                                            const char *circuit_text,
+                                            size_t      text_len,
+                                            int         num_shots,
+                                            uint64_t    rng_seed,
+                                            uint64_t  **out_outcomes,
+                                            size_t     *out_num,
+                                            uint64_t   *out_effective_seed);
 
 /* ------------------------------------------------------------------
  * Server lifecycle handle (since v0.8.13).

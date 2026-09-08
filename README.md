@@ -1,6 +1,6 @@
 # Moonlab Quantum Simulator
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-1.2.1-blue)]() [![Bell Test](https://img.shields.io/badge/CHSH-violates%20classical-success)](https://en.wikipedia.org/wiki/CHSH_inequality) [![State Vector](https://img.shields.io/badge/State%20Vector-32%20qubits-blue)]() [![PQC](https://img.shields.io/badge/PQC-ML--KEM%20512%2F768%2F1024-brightgreen)]() [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]() [![Sanitizers](https://img.shields.io/badge/ASAN%20%2B%20UBSAN-clean-brightgreen)]()
 
 > **Full-stack quantum simulation + quantum-safe cryptography: dense
 > state vector (32 qubits), tensor networks, Clifford tableau,
@@ -20,33 +20,36 @@ packages.
 See [COMMUNITY_EDITION.md](COMMUNITY_EDITION.md) for the public/private product
 boundary.
 
-## Current release: v1.2.0 (2026-07-23)
+## Current release: v1.2.1 (2026-08-22)
 
-Version 1.2 hardens the native CUDA state-vector backend and adds bounded MPI
-sharding beyond 32 qubits. Distributed gates exchange fixed-size chunks rather
-than full remote shards, and the release fleet gate binds an N=33 four-rank,
-two-host proof to the exact clean commit and observed 2+2 topology. Ordinary
-states remain on the CPU path with 1.x-compatible behavior.
+Version 1.2.1 adds attributable seeded control-plane shots and a complete
+logical closed-system transverse-field quantum annealer. The annealer accepts
+Ising or full-matrix QUBO objectives, evolves the real statevector under
+linear, quadratic, or cosine schedules, and returns deterministic samples plus
+exact optimum, degeneracy, final problem gap, residual energy, and success
+probability. Control protocol v1.1 carries and returns the effective non-zero
+uint64 SHOTS seed so work can be attributed and replayed bit-for-bit.
 
-The stable ABI has advanced from 0.3.0 through 0.4.0 (`moonlab_vqe_gradient`,
-exposing exact adjoint gradients for supported noise-free ansaetze and
-analytic parameter shift otherwise) to **0.6.0**, which adds
-`moonlab_qrng_get_status`, honest QRNG capability bits, a certification-
-language scrub, hidden-visibility exports for the binding-consumed surface, and
-the topology/CA-MPS additions documented in the stable ABI guide. The release
-also ships native Windows x64 and ARM64 packages built with ClangCL; both are
-tested as relocatable external CMake packages before upload.
+The stable C ABI is **0.8.0**. ABI 0.7.0 added exact pointwise band geometry,
+VQE metric, Berry curvature, and natural-gradient one-shots; ABI 0.8.0 adds the
+Ising and QUBO annealing one-shots. Python, Rust, and JavaScript/WASM expose the
+same annealing and seeded-SHOTS contracts. This release also includes native
+Stim circuit and detector-error-model interchange, the Python QEC/Sinter
+bridge, verified Clifford decompositions, public-surface stability tiers, and
+exact noise-marginal regression coverage.
 
-| 1.2 deliverable | Contract |
+| 1.2.1 deliverable | Contract |
 |---|---|
-| Bounded CUDA/MPI sharding | Chunked remote gates and expectations with exact N=33, four-rank, two-host attestation |
-| Stable ABI 0.6.0 | Hidden-visibility-safe native and binding surface, QGT topology one-shots, and CA-MPS conjugate Pauli |
-| Numerical and concurrency hardening | Sanitizer, TSan, no-LAPACK SVD, large-n differential, and adversarial control-plane gates |
-| Native CUDA state vector | GPU lifecycle, host/device sync, probabilities, norms, and transparent gate dispatch |
-| Windows distribution | `windows-x64.zip` and `windows-arm64.zip` with DLL, import library, headers, and CMake exports |
+| Attributable remote SHOTS | Wire v1.1 seed assignment, echo verification, structured logs, local replay, protocol fuzzing, and exact two-host replay |
+| Quantum annealing | Closed-system Ising/QUBO evolution, three schedules, first-/second-order formulas, deterministic samples, diagnostics, ABI 0.8.0, and binding parity |
+| Stim ecosystem interop | Fail-closed `.stim` and detector-error-model import/export, Python QEC/Sinter adapters, and reference-tableau verification |
+| Quantum geometry | Exact pointwise metric/curvature, VQE Berry curvature and natural gradient, custom ansatz support, and ABI 0.7.0 bindings |
+| Release integrity | Stability-tag and ABI-count ratchets, relocatable native SDK checks, sanitizer/oracle/mesh evidence, and strict v1.2.1 certificate inputs |
 
-See [the v1.2.0 release notes](docs/release/v1.2.0-release-notes.md),
-[Windows guide](docs/WINDOWS.md), and [full changelog](CHANGELOG.md#120---2026-07-23).
+See [the v1.2.1 release notes](docs/release/v1.2.1-release-notes.md),
+[quantum annealing guide](docs/QUANTUM_ANNEALING.md),
+[Windows guide](docs/WINDOWS.md), and
+[full changelog](CHANGELOG.md#121---2026-08-22).
 
 ## v1.0 platform foundation
 
@@ -1391,7 +1394,7 @@ If you use Moonlab in your research, please cite:
     author       = {tsotchke},
     title        = {{Moonlab}: A Quantum Computing Simulation Framework},
     year         = {2026},
-    version      = {v1.2.0},
+    version      = {v1.2.1},
     url          = {https://github.com/tsotchke/moonlab},
     license      = {MIT},
     keywords     = {quantum computing, simulation, tensor networks,

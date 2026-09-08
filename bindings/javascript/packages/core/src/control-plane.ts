@@ -86,6 +86,14 @@ export interface SubmitCircuitArgs {
 
 export interface SubmitShotsArgs extends SubmitCircuitArgs {
   numShots: number;
+  /** Optional exact non-zero uint64 replay seed (protocol v1.1).
+   *  Use bigint so JavaScript Number precision cannot corrupt the wire value. */
+  seed?: bigint;
+}
+
+export interface AttributedShotSamples {
+  outcomes: number[];
+  effectiveSeed: bigint;
 }
 
 export interface SubmitMetricsArgs {
@@ -389,16 +397,41 @@ export async function submitCircuit(args: SubmitCircuitArgs): Promise<number[]> 
   }
 }
 
-/** Submit a moonlab-circuit-v1 text payload + shot count, return the
- *  flat outcome-count array (length 2^N). */
+/** Submit a moonlab-circuit-v1 text payload + shot count.  The legacy return
+ * shape is retained; pass `seed` to request deterministic replay. */
 export async function submitShots(args: SubmitShotsArgs): Promise<number[]> {
+  const result = await submitShotsFull(args, args.seed !== undefined);
+  return result.outcomes;
+}
+
+/** Submit shots and retain the exact server seed for replay.  With no seed in
+ * `args`, the server assigns one.  This requires protocol v1.1 and fails
+ * closed if an older server omits the seed echo. */
+export async function submitShotsWithSeed(
+  args: SubmitShotsArgs,
+): Promise<AttributedShotSamples> {
+  return submitShotsFull(args, true);
+}
+
+async function submitShotsFull(
+  args: SubmitShotsArgs,
+  requireSeedReply: boolean,
+): Promise<AttributedShotSamples> {
   const timeoutMs = args.timeoutMs ?? 30_000;
+  if (args.seed !== undefined &&
+      (args.seed <= 0n || args.seed > 0xffff_ffff_ffff_ffffn)) {
+    throw new ControlPlaneError(
+      `seed ${args.seed} out of range [1, 2^64-1]`,
+      MOONLAB_CONTROL_BAD_ARG);
+  }
   const sock = await openSocket({ ...args, timeoutMs });
   try {
     if (args.tenantId !== undefined) validateTenantId(args.tenantId, args.secret);
     const body = Buffer.from(args.circuitText, 'utf-8');
+    const seedToken = args.seed === undefined
+      ? '' : ` seed=${args.seed.toString(16).padStart(16, '0')}`;
     const verbLine = Buffer.from(
-      `SHOTS ${args.numShots} ${body.length}\n`, 'ascii');
+      `SHOTS ${args.numShots} ${body.length}${seedToken}\n`, 'ascii');
     if (args.secret) {
       sock.write(authPrelude(args.secret, verbLine, args.tenantId));
     }
@@ -412,6 +445,38 @@ export async function submitShots(args: SubmitShotsArgs): Promise<number[]> {
         `unexpected framing: ${line.toString('ascii')}`,
         MOONLAB_CONTROL_IO_ERROR);
     }
+    const fields = fr.remainder.trim().split(/\s+/);
+    if (fields.length < 1 || fields.length > 2) {
+      throw new ControlPlaneError(
+        `malformed SAMPLES metadata: ${fr.remainder}`,
+        MOONLAB_CONTROL_IO_ERROR);
+    }
+    let effectiveSeed = 0n;
+    if (fields.length === 2) {
+      const match = /^seed=([0-9a-fA-F]{16})$/.exec(fields[1]);
+      if (!match) {
+        throw new ControlPlaneError(
+          `malformed SAMPLES seed: ${fields[1]}`,
+          MOONLAB_CONTROL_IO_ERROR);
+      }
+      effectiveSeed = BigInt(`0x${match[1]}`);
+      if (effectiveSeed === 0n) {
+        throw new ControlPlaneError(
+          'server returned a zero effective seed',
+          MOONLAB_CONTROL_IO_ERROR);
+      }
+    }
+    if (requireSeedReply && effectiveSeed === 0n) {
+      throw new ControlPlaneError(
+        'server omitted the effective SHOTS seed',
+        MOONLAB_CONTROL_IO_ERROR);
+    }
+    if (args.seed !== undefined && effectiveSeed !== args.seed) {
+      throw new ControlPlaneError(
+        `server seed mismatch: requested ${args.seed.toString(16)}, ` +
+        `received ${effectiveSeed.toString(16)}`,
+        MOONLAB_CONTROL_IO_ERROR);
+    }
     // SAMPLES numField = count of uint64 outcomes, body is numField * 8 bytes.
     const num = fr.numField;
     const raw = await recvExact(sock, num * 8, fr.bodySeed, timeoutMs);
@@ -421,7 +486,7 @@ export async function submitShots(args: SubmitShotsArgs): Promise<number[]> {
       // fit in 2^53 (16 PB shots) this Number conversion is exact.
       out[i] = Number(raw.readBigUInt64LE(i * 8));
     }
-    return out;
+    return { outcomes: out, effectiveSeed };
   } finally {
     await closeSocket(sock, timeoutMs);
   }

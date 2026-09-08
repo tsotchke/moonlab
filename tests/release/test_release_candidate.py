@@ -23,14 +23,14 @@ from verify_release_candidate import (  # noqa: E402
 
 
 WHEEL_FILENAMES = {
-    "wheel-linux-x64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-    "wheel-linux-x64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_x86_64.whl",
-    "wheel-linux-arm64-manylinux": "moonlab-1.2.0-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
-    "wheel-linux-arm64-musllinux": "moonlab-1.2.0-py3-none-musllinux_1_2_aarch64.whl",
-    "wheel-macos-arm64": "moonlab-1.2.0-py3-none-macosx_11_0_arm64.whl",
-    "wheel-macos-x64": "moonlab-1.2.0-py3-none-macosx_10_15_x86_64.whl",
-    "wheel-windows-x64": "moonlab-1.2.0-py3-none-win_amd64.whl",
-    "wheel-windows-arm64": "moonlab-1.2.0-py3-none-win_arm64.whl",
+    "wheel-linux-x64-manylinux": "moonlab-1.2.1-py3-none-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+    "wheel-linux-x64-musllinux": "moonlab-1.2.1-py3-none-musllinux_1_2_x86_64.whl",
+    "wheel-linux-arm64-manylinux": "moonlab-1.2.1-py3-none-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+    "wheel-linux-arm64-musllinux": "moonlab-1.2.1-py3-none-musllinux_1_2_aarch64.whl",
+    "wheel-macos-arm64": "moonlab-1.2.1-py3-none-macosx_11_0_arm64.whl",
+    "wheel-macos-x64": "moonlab-1.2.1-py3-none-macosx_10_15_x86_64.whl",
+    "wheel-windows-x64": "moonlab-1.2.1-py3-none-win_amd64.whl",
+    "wheel-windows-arm64": "moonlab-1.2.1-py3-none-win_arm64.whl",
 }
 HEAD = "a" * 40
 
@@ -58,11 +58,11 @@ class ReleaseCandidateTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def seal(self) -> None:
-        seal_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
+        seal_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.1")
 
     def test_complete_candidate_seals_and_verifies(self) -> None:
         self.seal()
-        document = verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
+        document = verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.1")
         self.assertEqual(len(document["artifacts"]), 24)
 
     def test_tampered_artifact_is_rejected(self) -> None:
@@ -70,7 +70,7 @@ class ReleaseCandidateTests(unittest.TestCase):
         path = next(self.dist.rglob("*.deb"))
         path.write_bytes(b"tampered\n")
         with self.assertRaisesRegex(CandidateError, "hashes or exact identities"):
-            verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
+            verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.1")
 
     def test_missing_duplicate_and_unexpected_artifacts_are_rejected(self) -> None:
         cases = ("missing", "duplicate", "unexpected")
@@ -88,26 +88,26 @@ class ReleaseCandidateTests(unittest.TestCase):
                 else:
                     (self.dist / "unexpected.txt").write_text("unexpected\n", encoding="utf-8")
                 with self.assertRaises(CandidateError):
-                    seal_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
+                    seal_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.1")
 
     def test_run_identity_mismatch_is_rejected(self) -> None:
         self.seal()
         with self.assertRaisesRegex(CandidateError, "identity mismatch"):
-            verify_candidate(self.dist, self.manifest, 12346, HEAD, "1.2.0")
+            verify_candidate(self.dist, self.manifest, 12346, HEAD, "1.2.1")
 
     def test_manifest_inside_dist_and_symlink_directories_are_rejected(self) -> None:
         inside = self.dist / "candidate.json"
         with self.assertRaisesRegex(CandidateError, "outside"):
-            verify_candidate(self.dist, inside, 12345, HEAD, "1.2.0")
+            verify_candidate(self.dist, inside, 12345, HEAD, "1.2.1")
         (self.root / "elsewhere").mkdir()
         (self.dist / "link").symlink_to(self.root / "elsewhere", target_is_directory=True)
         with self.assertRaisesRegex(CandidateError, "symlink"):
-            seal_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
+            seal_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.1")
 
     def test_duplicate_manifest_keys_are_rejected(self) -> None:
         self.manifest.write_text('{"schema":"a","schema":"b"}\n', encoding="utf-8")
         with self.assertRaisesRegex(CandidateError, "duplicate JSON key"):
-            verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.0")
+            verify_candidate(self.dist, self.manifest, 12345, HEAD, "1.2.1")
 
     def test_hosted_run_identity_and_complete_jobs_are_enforced(self) -> None:
         path = self.root / "run.json"

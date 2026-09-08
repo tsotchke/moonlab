@@ -27,7 +27,7 @@
 #   scripts/run_statistical.sh           -> kind: moonlab_statistical (statistical lane)
 #
 # Quarantine allowlists (genuine current-HEAD bugs a harness caught, each with
-# an owning lane; every entry MUST flip to required-pass before the v1.2.0 cut):
+# an owning lane; every entry MUST be required-pass before any release cut):
 #   tests/oracle/KNOWN_FAILURES.txt
 #   tests/fuzz/FINDINGS.md
 #   tests/differential/KNOWN_DIVERGENCES.txt
@@ -36,12 +36,19 @@
 oracles:
   # ---------------------------------------------------------------------------
   # THE release gate. `icc readiness --target moonlab-release-readiness
-  # --trace-dir scripts/icc_traces` is the single go/no-go for the v1.2.0 cut.
+  # --trace-dir scripts/icc_traces` is the single go/no-go for the v1.2.1 cut.
   # It requires the adversarial matrix to be green (see moonlab-adversarial-
   # matrix below) PLUS the whole-system correctness/capability smoke.
   # ---------------------------------------------------------------------------
   - name: moonlab-release-readiness
     target: moonlab-release-readiness
+    subject_model: Moonlab release tree with C/Python/Rust/JS bindings and optional remote or hardware lanes
+    assumes: >
+      This oracle grades the checked-out Moonlab source and its explicitly
+      supplied runtime traces. It is not a release certificate until every
+      required runtime lane is present and bound to the same clean tree.
+    authored: "2026-08-22"
+    review_by: "2026-09-22"
     aliases:
       - moonlab
       - libquantumsim
@@ -93,7 +100,7 @@ oracles:
           event_names: ["release_certificate_valid"]
           event_values: ["PASS"]
         severity: high
-        label: A fail-closed release certificate binds all evidence to the exact clean v1.2.0 source tree
+        label: A fail-closed release certificate binds all evidence to the exact clean v1.2.1 source tree
         action: python3 scripts/validate_release_certificate.py
 
       # -- Whole-system correctness smoke (run_moonlab_release_smoke.sh). --
@@ -292,6 +299,13 @@ oracles:
   # ---------------------------------------------------------------------------
   - name: moonlab-adversarial-matrix
     target: moonlab-adversarial-matrix
+    subject_model: Moonlab adversarial correctness and safety test matrix
+    assumes: >
+      The matrix is meaningful only when its executable oracle, fuzz,
+      differential, statistical, and sanitizer traces are supplied; indexed
+      tests alone do not establish readiness.
+    authored: "2026-08-22"
+    review_by: "2026-09-22"
     aliases:
       - adversarial
       - oracle-matrix
@@ -483,6 +497,13 @@ oracles:
   # ---------------------------------------------------------------------------
   - name: moonlab-abi-readiness
     target: moonlab-abi-readiness
+    subject_model: Moonlab stable C ABI and language-binding surface
+    assumes: >
+      ABI readiness covers symbols and binding tests in this repository; it
+      does not imply that external consumers have upgraded or that remote
+      hardware evidence exists.
+    authored: "2026-08-22"
+    review_by: "2026-09-22"
     aliases:
       - abi
       - moonlab_export
@@ -539,6 +560,13 @@ oracles:
   # ---------------------------------------------------------------------------
   - name: ca-tn-paper-readiness
     target: ca-tn-paper-readiness
+    subject_model: CA-TN paper benchmark and artifact pipeline
+    assumes: >
+      This oracle grades repository-local numerical implementations and
+      validated artifacts, not publication acceptance or claims beyond the
+      supplied benchmark evidence.
+    authored: "2026-08-22"
+    review_by: "2026-09-22"
     aliases:
       - ca-mps
       - ca-tn
@@ -580,3 +608,125 @@ oracles:
         severity: high
         label: Runtime trace records no failures in CA-TN benches
         action: fix_runtime_failure
+
+  # ---------------------------------------------------------------------------
+  # v1.2.1 L5 WS1: attributable seed-on-wire for remote SHOTS.
+  # Local tests are necessary but intentionally insufficient: the paid-compute
+  # contract requires a clean-tree, two-host byte replay before this target can
+  # become ready.
+  # ---------------------------------------------------------------------------
+  - name: moonlab-v1.2.1-seeded-shots
+    target: moonlab-v1.2.1-seeded-shots
+    subject_model: Attributable seeded remote-SHOTS protocol and replay lane
+    assumes: >
+      Local replay, protocol fuzz, and two-host replay are separate required
+      claims; this oracle must remain blocked when any remote trace is absent.
+    authored: "2026-08-22"
+    review_by: "2026-09-22"
+    aliases:
+      - seeded-shots
+      - seed-on-wire
+      - v1.2.1-ws1
+    requires:
+      - id: seeded_shots_tests_indexed
+        test_evidence: true
+        severity: high
+        label: Seeded SHOTS native and binding tests are indexed
+        action: ./scripts/run_seeded_shots_local_gate.sh
+      - id: seeded_shots_local_replay
+        runtime_event:
+          event_kinds: [moonlab_seeded_shots]
+          event_names: [local_bit_replay]
+          event_values: [PASS]
+        severity: high
+        label: Same circuit, shots, and seed replay byte-identically on one clean source tree
+        action: ./scripts/run_seeded_shots_local_gate.sh
+      - id: seeded_shots_protocol_fuzz
+        runtime_event:
+          event_kinds: [moonlab_seeded_shots]
+          event_names: [protocol_fuzz_clean]
+          event_values: [PASS]
+        severity: high
+        label: Seed token framing is clean under ASan and UBSan corpus replay
+        action: ./scripts/run_seeded_shots_local_gate.sh
+      - id: seeded_shots_cross_host_replay
+        runtime_event:
+          event_kinds: [moonlab_seeded_shots]
+          event_names: [cross_host_bit_replay]
+          event_values: [PASS]
+        severity: high
+        label: Two independent fleet hosts return byte-identical outcomes for the same request seed
+        action: ./scripts/run_seeded_shots_mesh_gate.sh
+      - id: failure_free
+        runtime_check: failure_free
+        severity: high
+        label: Seeded SHOTS evidence contains no failed event
+        action: fix_seeded_shots_runtime_failure
+
+  # ---------------------------------------------------------------------------
+  # v1.2.1 complete closed-system transverse-field quantum annealing.
+  # ---------------------------------------------------------------------------
+  - name: moonlab-v1.2.1-quantum-annealing
+    target: moonlab-v1.2.1-quantum-annealing
+    subject_model: Closed-system transverse-field quantum-annealing implementation and bindings
+    assumes: >
+      Annealing readiness requires independent evolution, parity, binding,
+      sanitizer, and ABI evidence; a classical optimizer or prose claim is
+      not a substitute for those traces.
+    authored: "2026-08-22"
+    review_by: "2026-09-22"
+    aliases:
+      - quantum-annealing-v121
+      - complete-quantum-annealing
+      - annealing-abi-080
+    requires:
+      - id: annealing_tests_indexed
+        test_evidence: true
+        severity: high
+        label: Native, ABI, and binding annealing tests are indexed
+        action: ./scripts/run_quantum_annealing_gate.sh
+      - id: annealing_rk4_oracle
+        runtime_event:
+          event_kinds: [moonlab_quantum_annealing]
+          event_names: [rk4_oracle]
+          event_values: [PASS]
+        severity: high
+        label: Product-formula evolution agrees with an independent RK4 Schrodinger integration
+        action: ./scripts/run_quantum_annealing_gate.sh
+      - id: annealing_qubo_ising_parity
+        runtime_event:
+          event_kinds: [moonlab_quantum_annealing]
+          event_names: [qubo_ising_parity]
+          event_values: [PASS]
+        severity: high
+        label: Full-matrix QUBO and converted Ising energies agree on every oracle bitstring
+        action: ./scripts/run_quantum_annealing_gate.sh
+      - id: annealing_binding_parity
+        runtime_event:
+          event_kinds: [moonlab_quantum_annealing]
+          event_names: [binding_parity]
+          event_values: [PASS]
+        severity: high
+        label: Python, Rust, and JavaScript expose the complete configuration and result contract
+        action: ./scripts/run_quantum_annealing_gate.sh
+      - id: annealing_asan_ubsan_clean
+        runtime_event:
+          event_kinds: [moonlab_quantum_annealing]
+          event_names: [asan_ubsan_clean]
+          event_values: [PASS]
+        severity: high
+        label: Bounded fuzzed QUBO, schedule, and output-buffer inputs are sanitizer clean
+        action: ./scripts/run_quantum_annealing_gate.sh
+      - id: annealing_abi_080
+        runtime_event:
+          event_kinds: [moonlab_quantum_annealing]
+          event_names: [abi_080]
+          event_values: [PASS]
+        severity: high
+        label: ABI 0.8.0 one-shots resolve and return correct analytic summaries
+        action: ./scripts/run_quantum_annealing_gate.sh
+      - id: failure_free
+        runtime_check: failure_free
+        severity: high
+        label: Quantum-annealing evidence contains no failed event
+        action: fix_quantum_annealing_runtime_failure

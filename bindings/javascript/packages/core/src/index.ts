@@ -185,6 +185,12 @@ export type {
 // Quantum Approximate Optimization Algorithm (since 0.5.5).
 export { Graph, IsingModel, QaoaSolver } from './qaoa';
 export type { QaoaResult } from './qaoa';
+export {
+  annealIsing, annealQubo, annealIsingWithModule, annealQuboWithModule,
+} from './annealing';
+export type {
+  AnnealConfig, AnnealResult, AnnealSchedule, AnnealingWasmModule,
+} from './annealing';
 
 // Topological invariants (since 0.5.6).
 export {
@@ -286,6 +292,7 @@ export type {
 export {
   submitCircuit as controlPlaneSubmitCircuit,
   submitShots   as controlPlaneSubmitShots,
+  submitShotsWithSeed as controlPlaneSubmitShotsWithSeed,
   submitHealth  as controlPlaneSubmitHealth,
   submitMetrics as controlPlaneSubmitMetrics,
   ControlPlaneError,
@@ -303,6 +310,7 @@ export type {
   TlsOptions as ControlPlaneTlsOptions,
   SubmitCircuitArgs as ControlPlaneSubmitCircuitArgs,
   SubmitShotsArgs as ControlPlaneSubmitShotsArgs,
+  AttributedShotSamples as ControlPlaneAttributedShotSamples,
   SubmitMetricsArgs as ControlPlaneSubmitMetricsArgs,
 } from './control-plane';
 
@@ -333,7 +341,7 @@ export type { GPUBackendTypeCode } from './gpu-backend';
 // Version Info
 // ============================================================================
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 
 // ============================================================================
 // Type-only Exports

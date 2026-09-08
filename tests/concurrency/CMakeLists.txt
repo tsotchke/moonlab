@@ -124,13 +124,27 @@ set_tests_properties(conc_audit_buffer_destroy PROPERTIES
 if(MOONLAB_TSAN_LIB_OMP)
     if(MOONLAB_OMP_LIB)
         set(_omp_lib "${MOONLAB_OMP_LIB}")
-    elseif(APPLE)
-        find_library(_omp_lib omp PATHS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib)
-        if(NOT _omp_lib)
-            set(_omp_lib "-lomp")
-        endif()
     else()
-        set(_omp_lib "-lomp")
+        # Ubuntu's libomp-dev commonly installs under /usr/lib/llvm-*/lib,
+        # which is not in the linker's default search path. Ask the selected
+        # compiler first, then probe known package-manager locations.
+        execute_process(
+            COMMAND "${CMAKE_C_COMPILER}" -print-file-name=libomp.so
+            OUTPUT_VARIABLE _omp_from_compiler OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        if(IS_ABSOLUTE "${_omp_from_compiler}" AND EXISTS "${_omp_from_compiler}")
+            set(_omp_lib "${_omp_from_compiler}")
+        else()
+            find_library(_omp_lib NAMES omp libomp
+                PATHS /opt/homebrew/opt/libomp/lib /usr/local/opt/libomp/lib
+                      /usr/lib /usr/local/lib /usr/lib/x86_64-linux-gnu
+                      /usr/lib/aarch64-linux-gnu /usr/local/llvm/lib /opt/llvm/lib
+                      /usr/lib/llvm/lib /usr/lib/llvm-18/lib /usr/lib/llvm-17/lib
+                      /usr/lib/llvm-16/lib /usr/lib/llvm-15/lib)
+        endif()
+    endif()
+    if(NOT _omp_lib)
+        message(FATAL_ERROR "[conc] Could not resolve a full path for libomp. Set -DMOONLAB_OMP_LIB=/path/to/libomp.so/.dylib")
     endif()
 
     add_executable(conc_grover_gates conc_grover_gates.c)

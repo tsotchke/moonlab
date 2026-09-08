@@ -109,6 +109,9 @@
                    src/optimization/simd_dispatch.c)
     target_include_directories(test_simd_dispatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(test_simd_dispatch PRIVATE ${MATH_LIBRARY} Threads::Threads ${QSIM_CLANG_BUILTINS})
+    if(QSIM_SIMD_AVX512)
+        target_compile_definitions(test_simd_dispatch PRIVATE HAS_AVX512=1)
+    endif()
     if(QSIM_HAS_ACCELERATE)
         target_link_libraries(test_simd_dispatch PRIVATE ${ACCELERATE_FRAMEWORK})
         target_compile_definitions(test_simd_dispatch PRIVATE HAS_ACCELERATE=1)
@@ -168,6 +171,16 @@
     add_executable(test_noise tests/unit/test_noise.c)
     target_link_libraries(test_noise PRIVATE quantumsim)
     add_test(NAME unit_noise COMMAND test_noise)
+
+    # Noise-instruction marginals against closed-form probabilities at 2^27
+    # shots per case.  The gate decompositions are proved exactly against
+    # stim.Tableau, so any surface-code disagreement with Stim has to live in
+    # the noise/measurement semantics; this pins every one of them to its
+    # exact rate rather than to another sampler's output.
+    add_executable(test_noise_marginals tests/unit/test_noise_marginals.c)
+    target_link_libraries(test_noise_marginals PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_noise_marginals COMMAND test_noise_marginals)
+    set_tests_properties(unit_noise_marginals PROPERTIES TIMEOUT 300)
 
     # Grover algorithm smoke: on 3/4/5 qubits, success probability on the
     # marked state must exceed 0.8 after pi/4 * sqrt(N) iterations.
@@ -1689,7 +1702,11 @@
     # meaningful for shared builds.
     if(QSIM_BUILD_SHARED)
         add_executable(test_moonlab_export_abi tests/abi/test_moonlab_export_abi.c)
-        target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
+        if(QSIM_PLATFORM_LINUX)
+            target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS} ${MATH_LIBRARY})
+        else()
+            target_link_libraries(test_moonlab_export_abi PRIVATE ${CMAKE_DL_LIBS})
+        endif()
         add_test(NAME abi_moonlab_export
                  COMMAND test_moonlab_export_abi)
         # Make the freshly-built libquantumsim discoverable to the test at
@@ -1754,7 +1771,7 @@
     qsim_label_tests(clifford
         unit_clifford unit_clifford_rowsum unit_clifford_pauli_api
         unit_pauli_frame unit_surface_code_clifford unit_uf_decoder
-        unit_stim_circuit unit_stim_dem)
+        unit_stim_circuit unit_stim_dem unit_noise_marginals)
     qsim_label_tests(algorithms
         unit_grover unit_qaoa unit_qaoa_gradient unit_qpe unit_vqe
         unit_vqe_gradient_contract unit_chemistry

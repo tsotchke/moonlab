@@ -452,6 +452,8 @@ _moonlab_job_add_gate
 _moonlab_job_set_num_shots
 _moonlab_job_set_num_workers
 _moonlab_job_set_rng_seed
+_moonlab_anneal_ising_v1
+_moonlab_anneal_qubo_v1
 _moonlab_job_num_qubits
 _moonlab_job_num_gates
 _moonlab_job_num_shots

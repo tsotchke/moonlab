@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "../../src/optimization/simd_dispatch.h"
+#include "../../src/optimization/simd_avx512.h"
 
 // ============================================================================
 // TEST UTILITIES
@@ -70,6 +71,28 @@ static int test_capability_detection(void) {
 #endif
 
     TEST_PASS("Capability detection test passed");
+    return 1;
+}
+
+static int test_avx512_runtime_guard(void) {
+#ifdef HAS_AVX512
+    const simd_info_t* info = simd_detect_capabilities_full();
+    int runtime_avx512 = info->has_avx512f &&
+                         info->has_avx512dq &&
+                         info->has_avx512bw &&
+                         info->has_avx512vl;
+
+    /* This is intentionally a negative-capability assertion as well: a
+     * build with AVX-512 enabled must not dispatch it when any required
+     * extension (or OS XCR0 state, reflected by the detector) is absent. */
+    TEST_ASSERT(avx512_is_available() == runtime_avx512,
+                "AVX-512 dispatch must require all runtime extensions");
+#else
+    TEST_ASSERT(avx512_is_available() == 0,
+                "AVX-512 must be unavailable when not compiled in");
+#endif
+
+    TEST_PASS("AVX-512 runtime guard test passed");
     return 1;
 }
 
@@ -410,6 +433,7 @@ int main(void) {
 
     // Detection tests
     RUN_TEST(test_capability_detection);
+    RUN_TEST(test_avx512_runtime_guard);
     RUN_TEST(test_capability_flags);
     RUN_TEST(test_capability_string);
     RUN_TEST(test_simd_level);

@@ -17,6 +17,7 @@ from moonlab.control_plane import (
     ControlPlaneError,
     ControlPlaneServer,
     submit_circuit,
+    submit_circuit_shots_with_seed,
     submit_health,
     submit_metrics,
 )
@@ -57,6 +58,26 @@ def test_circuit_bell_probabilities():
     assert abs(probs[3] - 0.5) < 1e-9
     assert probs[1] < 1e-9
     assert probs[2] < 1e-9
+
+
+def test_seeded_shots_replay_and_assigned_seed_echo():
+    text = _bell_circuit_text()
+    requested = 0x0123456789ABCDEF
+    with ControlPlaneServer(host="127.0.0.1", port=0) as srv:
+        first, seed_a = submit_circuit_shots_with_seed(
+            "127.0.0.1", srv.port, text, 512, seed=requested)
+        second, seed_b = submit_circuit_shots_with_seed(
+            "127.0.0.1", srv.port, text, 512, seed=requested)
+        assigned, effective = submit_circuit_shots_with_seed(
+            "127.0.0.1", srv.port, text, 512)
+        replayed, replay_seed = submit_circuit_shots_with_seed(
+            "127.0.0.1", srv.port, text, 512, seed=effective)
+
+    assert seed_a == requested == seed_b
+    assert first == second
+    assert effective != 0
+    assert replay_seed == effective
+    assert assigned == replayed
 
 
 def test_set_request_timeout_runtime():

@@ -10,7 +10,7 @@
 # `cargo package` would refuse to resolve their path+version dependencies, so a
 # throwaway `--config patch.crates-io.<sibling>.path=...` points the resolver at
 # the local sibling.  Cargo strips this patch from the packaged manifest, so the
-# rewritten registry dependency (e.g. moonlab-sys = "1.2.0") is what ships.
+# rewritten registry dependency (for the current release version) is what ships.
 #
 # Usage:   scripts/package_rust_crates.sh <output-dir>
 # Env:     MOONLAB_ALLOW_DIRTY=1  add --allow-dirty (local trees with edits)
@@ -19,6 +19,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUST_ROOT="$ROOT/bindings/rust"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION.txt")"
 OUT="${1:?usage: package_rust_crates.sh <output-dir>}"
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
@@ -30,14 +31,19 @@ fi
 
 package_one() {
     local crate="$1"
+    local artifact="$RUST_ROOT/target/package/$crate-$VERSION.crate"
     shift
     local patch_flags=("$@")
+    rm -f "$artifact"
     (
         cd "$RUST_ROOT/$crate"
-        rm -f target/package/*.crate 2>/dev/null || true
         cargo "${PACKAGE_FLAGS[@]}" ${patch_flags[@]+"${patch_flags[@]}"}
-        cp target/package/*.crate "$OUT/"
     )
+    if [[ ! -f "$artifact" ]]; then
+        echo "cargo did not produce the expected workspace artifact: $artifact" >&2
+        exit 1
+    fi
+    cp "$artifact" "$OUT/"
     echo "packaged $crate"
 }
 

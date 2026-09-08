@@ -73,9 +73,11 @@ CIRCUIT <body_len>\n               -- run circuit; body = moonlab-circuit v1 tex
 <body bytes>
             <- OK <num_doubles>\n<num_doubles * 8 bytes of LE doubles>
 
-SHOTS <shots> <body_len>\n         -- sample shots from circuit
+SHOTS <shots> <body_len> [seed=<hex64>]\n
+                                     -- sample shots; optional exact uint64 seed
 <body bytes>
-            <- SAMPLES <num_outcomes>\n<num_outcomes * 8 bytes of LE uint64>
+            <- SAMPLES <num_outcomes> seed=<hex64>\n
+               <num_outcomes * 8 bytes of LE uint64>
 
 HEALTH\n                           -- liveness ping
             <- OK\n
@@ -89,6 +91,22 @@ AUTH <hexdigest>\n                 -- HMAC-SHA3-256 of next request body
 CIRCUIT_AUTH <body_len> <hexdigest>\n
 <body bytes>
 ```
+
+`seed=<hex64>` is exactly 16 hexadecimal digits and must encode a non-zero
+uint64.  When the request omits it, the server assigns a non-zero clock-based
+seed before execution.  In both forms the response echoes the effective seed,
+and `MOONLAB_CONTROL_LOG=1` records the same value.  Replaying the same
+canonical circuit, shot count, and seed produces byte-identical outcomes.
+
+The release replay probe uses the canonical two-qubit Bell circuit and a fixed
+non-zero seed.  Run the focused local executable with
+`cmake --build build --target seeded_shots_replay_probe` followed by
+`build/seeded_shots_replay_probe`; it emits one host-independent line containing
+the seed, shot count, and ordered outcomes.  The two-host release gate is
+`./scripts/run_seeded_shots_mesh_gate.sh [target target]` (or set
+`MOONLAB_SEEDED_SHOTS_TARGETS`); it requires a clean tree, stages only `git
+archive HEAD` in unique directories, and records PASS/FAIL evidence in
+`scripts/icc_traces/moonlab_seeded_shots.jsonl` after byte comparison.
 
 Note that the integer field after the verb has different units per
 reply: ``OK <n>`` is a *count of doubles*, ``SAMPLES <n>`` is a
@@ -313,7 +331,8 @@ watch -n1 'printf "METRICS\n" | nc 127.0.0.1 7070 \
 
 ## 8. Versioning
 
-The control-plane wire protocol is stable across MoonLab 0.x; new
-verbs and status codes are additive.  Clients that see an unknown
+The control-plane wire protocol is version 1.1 as of Moonlab 1.2.1.  v1.1 adds
+the optional SHOTS request seed and mandatory effective-seed metadata on the
+SAMPLES response.  New verbs and status codes are additive.  Clients that see an unknown
 `OK <n>\n<bytes>` should treat the trailing bytes as opaque and pass
 through.

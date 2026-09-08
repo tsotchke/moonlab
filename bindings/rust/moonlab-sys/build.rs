@@ -166,6 +166,7 @@ fn main() {
         "algorithms/grover.h",
         "algorithms/vqe.h",
         "algorithms/qaoa.h",
+        "algorithms/quantum_annealing.h",
         "visualization/feynman_diagram.h",
     ] {
         println!(
@@ -187,6 +188,7 @@ fn main() {
 #include "algorithms/bell_tests.h"
 #include "algorithms/vqe.h"
 #include "algorithms/qaoa.h"
+#include "algorithms/quantum_annealing.h"
 #include "utils/quantum_entropy.h"
 #include "utils/config.h"
 #include "visualization/feynman_diagram.h"
@@ -356,6 +358,11 @@ fn main() {
         .allowlist_function("graph_create")
         .allowlist_function("graph_free")
         .allowlist_function("graph_add_edge")
+        // Complete transverse-field quantum annealing (v1.2.1).
+        .allowlist_type("moonlab_anneal_.*")
+        .allowlist_function("moonlab_anneal_.*")
+        .allowlist_function("moonlab_quantum_anneal_.*")
+        .allowlist_function("moonlab_qubo_.*")
         // Entropy context
         .allowlist_type("quantum_entropy_ctx_t")
         .allowlist_type("quantum_entropy_fn")
@@ -424,6 +431,7 @@ fn main() {
         .allowlist_function("moonlab_control_serve")
         .allowlist_function("moonlab_control_submit_circuit")
         .allowlist_function("moonlab_control_submit_circuit_shots")
+        .allowlist_function("moonlab_control_submit_circuit_shots_seeded")
         // Lifecycle API (since v0.8.13).
         .allowlist_function("moonlab_control_server_open")
         .allowlist_function("moonlab_control_server_run")

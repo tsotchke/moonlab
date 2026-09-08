@@ -101,13 +101,19 @@ emcmake cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
 
 echo "==> Building"
 # macOS (BSD) does not ship `nproc`; fall back to sysctl or single-job.
-if command -v nproc >/dev/null 2>&1; then
+if [ -n "${QSIM_WASM_JOBS:-}" ]; then
+  JOBS="$QSIM_WASM_JOBS"
+elif command -v nproc >/dev/null 2>&1; then
   JOBS="$(nproc)"
 elif command -v sysctl >/dev/null 2>&1; then
   JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 1)"
 else
   JOBS=1
 fi
+# Serving hosts are shared infrastructure. Cap implicit host detection at four
+# workers; callers may request fewer via QSIM_WASM_JOBS.
+if [ "$JOBS" -gt 4 ]; then JOBS=4; fi
+case "$JOBS" in 1|2|3|4) ;; *) echo "QSIM_WASM_JOBS must be in [1,4]" >&2; exit 2 ;; esac
 emmake make -C "${BUILD_DIR}" -j"${JOBS}"
 
 echo "==> Staging libs/headers"

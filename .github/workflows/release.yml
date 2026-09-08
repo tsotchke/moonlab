@@ -55,6 +55,10 @@ jobs:
             tag="${{ github.ref_name }}"
             version="${tag#v}"
           fi
+          [[ "$version" == "1.2.1" ]] || {
+            echo "this workflow is the strict v1.2.1 release path; got $version" >&2
+            exit 1
+          }
           python3 scripts/version_tool.py check --tag "$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -579,9 +583,118 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publication-readiness:
+  release-certificate-verify:
     if: github.event_name == 'push'
     needs: [preflight, promotion-verify]
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Parse the tag-bound orphan evidence commit and certificate digest
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "${{ needs.preflight.outputs.tag }}" "$GITHUB_OUTPUT" <<'PY'
+          from pathlib import Path
+          import sys
+
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from validate_release_certificate import _tag_release_evidence_binding
+
+          branch, commit, certificate_sha256 = _tag_release_evidence_binding(
+              Path.cwd(), sys.argv[1]
+          )
+          with Path(sys.argv[2]).open("a", encoding="utf-8") as output:
+              output.write(
+                  f"branch={branch}\ncommit={commit}\ncertificate_sha256={certificate_sha256}\n"
+              )
+          PY
+
+      - name: Fetch and extract the immutable evidence commit
+        env:
+          EVIDENCE_BRANCH: ${{ steps.evidence.outputs.branch }}
+          EVIDENCE_COMMIT: ${{ steps.evidence.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EVIDENCE_BRANCH" == "release-evidence/v1.2.1" ]]
+          git fetch --no-tags origin \
+            "refs/heads/$EVIDENCE_BRANCH:refs/remotes/origin/$EVIDENCE_BRANCH"
+          [[ "$(git rev-parse "refs/remotes/origin/$EVIDENCE_BRANCH")" == "$EVIDENCE_COMMIT" ]]
+          evidence_dir=scripts/icc_traces/release-certificate
+          mkdir -p "$evidence_dir"
+          git archive --format=tar "$EVIDENCE_COMMIT" | tar -x -C "$evidence_dir"
+          test -s "$evidence_dir/moonlab-v1.2.1-release-certificate.json"
+          actual_sha256="$(sha256sum "$evidence_dir/moonlab-v1.2.1-release-certificate.json" | awk '{print $1}')"
+          [[ "$actual_sha256" == '${{ steps.evidence.outputs.certificate_sha256 }}' ]]
+
+      - name: Download exact candidate and portability evidence sources
+        env:
+          CANDIDATE_RUN_ID: ${{ needs.promotion-verify.outputs.candidate-run-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p promotion/candidate promotion/portability
+          for artifact in \
+            native-linux-x64 native-linux-arm64 native-macos-arm64 native-macos-x64 \
+            native-windows-x64 native-windows-arm64 debian-amd64 debian-arm64 \
+            python-linux-x64 python-linux-arm64 python-macos-arm64 python-macos-x64 \
+            python-windows-x64 python-windows-arm64 npm-packages rust-crates; do
+            gh run download "$CANDIDATE_RUN_ID" --repo '${{ github.repository }}' \
+              --name "$artifact" --dir promotion/candidate
+          done
+          for artifact in \
+            linux-portability-aggregate \
+            linux-portability-lane-debian-12-amd64 \
+            linux-portability-lane-debian-12-arm64 \
+            linux-portability-lane-debian-13-amd64 \
+            linux-portability-lane-debian-13-arm64 \
+            linux-portability-lane-ubuntu-22.04-amd64 \
+            linux-portability-lane-ubuntu-22.04-arm64 \
+            linux-portability-lane-ubuntu-24.04-amd64 \
+            linux-portability-lane-ubuntu-24.04-arm64 \
+            linux-portability-lane-ubuntu-26.04-amd64 \
+            linux-portability-lane-ubuntu-26.04-arm64; do
+            gh run download "$CANDIDATE_RUN_ID" --repo '${{ github.repository }}' \
+              --name "$artifact" --dir promotion/portability
+          done
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Rehydrate only the certificate-declared large bindings
+        run: >-
+          python3 scripts/materialize_release_evidence.py
+          --certificate scripts/icc_traces/release-certificate/moonlab-v1.2.1-release-certificate.json
+          --source promotion/candidate
+          --source promotion/portability
+
+      - name: Validate the strict v1.2.1 certificate before publication readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          certificate=scripts/icc_traces/release-certificate/moonlab-v1.2.1-release-certificate.json
+          icc_index_relative="$(jq -er '.icc.index.path' "$certificate")"
+          icc_index="scripts/icc_traces/release-certificate/$icc_index_relative"
+          test -s "$icc_index"
+          MOONLAB_ICC_INDEX="$GITHUB_WORKSPACE/$icc_index" \
+            python3 scripts/validate_release_certificate.py \
+            --certificate "$certificate" \
+            --icc-index "$icc_index"
+
+  publication-readiness:
+    if: github.event_name == 'push'
+    needs: [preflight, promotion-verify, release-certificate-verify]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6

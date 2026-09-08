@@ -19,12 +19,16 @@ describe('Grover search', () => {
   let state: QuantumState;
   afterEach(() => { state?.dispose(); });
 
-  it('finds the marked state with > 95% probability at n=4', async () => {
+  it('achieves > 95% marked-state probability at n=4', async () => {
     state = await QuantumState.create({ numQubits: 4 });
     const r = await groverSearch(state, 0b1010n);
-    expect(r.successProbability).toBeGreaterThan(0.9);
-    expect(r.foundMarkedState).toBe(true);
-    expect(r.foundState).toBe(0b1010n);
+    // foundState is one random projective measurement.  Check the actual
+    // probability requirement and the result metadata contract, without
+    // requiring every >95%-likely sample to be the marked state.
+    expect(r.successProbability).toBeGreaterThan(0.95);
+    expect(r.foundMarkedState).toBe(r.foundState === 0b1010n);
+    expect(r.foundState).toBeGreaterThanOrEqual(0n);
+    expect(r.foundState).toBeLessThan(16n);
     expect(r.iterationsPerformed).toBe(await groverOptimalIterations(4));
   });
 

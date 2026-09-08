@@ -11,7 +11,7 @@ import {
 
 describe('@tsotchkecorp/moonlab-viz public utilities', () => {
   it('reports the release version and round-trips colors', () => {
-    expect(VERSION).toBe('1.2.0');
+    expect(VERSION).toBe('1.2.1');
     expect(rgbToHex([12, 34, 56])).toBe('#0c2238');
     expect(hexToRgb('#0c2238')).toEqual([12, 34, 56]);
   });

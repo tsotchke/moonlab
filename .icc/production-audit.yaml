@@ -1,5 +1,5 @@
 profiles:
-  - name: moonlab-v1.2.0-release
+  - name: moonlab-v1.2.1-release
     targets:
       - moonlab-release-readiness
     index_quality_exclude_path_prefixes:

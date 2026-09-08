@@ -7,7 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-22
+
 ### Added
+
+- **Complete quantum annealing (v1.2.1 / ABI 0.8.0).** A real
+  transverse-field statevector engine now solves symmetric Ising and
+  full-matrix `x^T Q x` QUBO objectives under linear, quadratic, and cosine
+  schedules. It supports first- and second-order product formulas, explicit or
+  attributed seeds, retained deterministic samples, and exact post-evolution
+  diagnostics: optimum, degeneracy, final problem gap, expected/residual
+  energy, most-likely state, norm, and ground-state success probability.
+  Stable `moonlab_anneal_{ising,qubo}_v1` one-shots advance the ABI to 0.8.0;
+  Python, Rust, and JavaScript/WASM expose full configuration and result
+  parity. Verification includes an independent one-qubit RK4 Schrödinger
+  oracle, exact QUBO/Ising energy parity over every bitstring, deterministic
+  replay, ABI `dlsym`, fuzzed QUBO/schedule/buffer inputs, and a runnable C
+  example. The declared scope is the exact logical closed-system model, not a
+  finite-temperature hardware/minor-embedding emulator.
+
+- **Attributable, reproducible control-plane SHOTS (v1.2.1 / wire v1.1).**
+  `SHOTS <shots> <bytes> [seed=<hex64>]` now accepts an exact non-zero
+  64-bit replay seed. The server assigns a non-zero seed when omitted, passes
+  the effective value into the sampler before execution, echoes it as
+  `SAMPLES <shots> seed=<hex64>`, and records it in both text and JSON request
+  logs. The additive C `moonlab_control_submit_circuit_shots_seeded` API and
+  attributed Python, Rust, JavaScript, and WebSocket-gateway clients verify
+  the echo fail-closed, so a pre-v1.1 peer cannot silently ignore a requested
+  seed. Integration tests prove byte-identical Bell outcomes for repeated
+  explicit seeds and for replay of a server-assigned seed; the protocol fuzz
+  corpus now includes valid and malformed seeded frames.
 
 - **First-class interop with the Stim QEC ecosystem.** moonlab reads and
   writes the community's own file formats, so its QEC claims can be checked
@@ -248,6 +277,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `apply_F_move()` it returns `QS_ERROR_INVALID_STATE` rather than silently
   braiding in the wrong basis.
 
+### Fixed
+
+- **Native SDK component installs now include generated package metadata.**
+  `quantumsim.pc.install` belongs to the `native-sdk` component, so component
+  archives retain a working pkg-config surface alongside the CMake package.
+- **Linux release gates resolve their real link dependencies.** The public ABI
+  probe links libm on Linux, and the TSan concurrency harness receives an
+  absolute compiler-resolved libomp path instead of relying on a missing bare
+  `-lomp` search result.
+- **Noise-instruction marginals are pinned to their closed-form rates.** A
+  high-shot deterministic regression checks every supported noise and
+  measurement semantic directly, preventing simulator-to-simulator agreement
+  from hiding a shared probability error.
+
 ### Known issues (not regressions)
 
 - **Two-qubit Fibonacci gates leak.** `anyonic_entangle()` is a unitary
@@ -395,6 +438,11 @@ merged PRs #12, #13, #14, and #18.
   have.
 
 ### Fixed
+
+- **Native SDK component install.** `cmake --install --component native-sdk`
+  now runs the pkg-config generation hook in the same component before
+  installing `quantumsim.pc`; previously it installed the headers and then
+  failed because `quantumsim.pc.install` did not exist.
 
 - **Hidden-visibility public ABI.** Public declarations used by native tools,
   examples, Python, Rust, JavaScript, and distributed consumers now carry the
