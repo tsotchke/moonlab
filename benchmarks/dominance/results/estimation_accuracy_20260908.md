@@ -22,6 +22,9 @@ seeds at each horizon. Relative to packed Stim, the median RMSE was about 32%
 lower at 250 ms and 35% lower at one second. This is an estimation-precision
 observation at a deadline; it does not establish better intrinsic simulation
 accuracy, a universal advantage, or release readiness.
+It also is not a comparison against exact-probability queries: if marginals
+alone are the requested output, the analytic model can return them without
+sampling error. The measured advantage concerns estimates from shot streams.
 
 Only batches whose sampling, output normalization, validation, summation and
 count aggregation all finished by the deadline contribute. Stim's required

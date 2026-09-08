@@ -4,6 +4,10 @@ This is an estimation experiment, not a throughput or superiority claim.  A
 wall-clock budget starts after circuit/library preparation.  A batch is counted
 only when both sampling and reduction finish before the deadline; a late final
 batch is explicitly reported and never contributes to the estimate.
+
+This compares estimates derived from shot streams, not exact-probability
+queries. For marginal probabilities alone, the analytic model used as the
+reference has no Monte Carlo error and avoids sampling altogether.
 """
 from __future__ import annotations
 

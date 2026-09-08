@@ -119,6 +119,9 @@ and library preparation are outside the budget and reported separately.
 The fixed-N IID expected MSE is descriptive, not a guarantee conditional on
 deadline-based stopping. Preserve every seed and failed/incomplete cell;
 five exploratory seeds do not certify a universal accuracy advantage.
+This compares estimates derived from sampled shots. It does not compare the
+best exact-probability query: if marginals alone are needed, the analytic model
+can supply them without Monte Carlo error.
 
 The `linux-x64-lite` CI job now runs the analytic marginal and joint audits,
 their negative controls, and the deadline-accounting tests. It uploads the
