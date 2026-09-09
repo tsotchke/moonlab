@@ -1,0 +1,10 @@
+Test project /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke
+    Start 153: unit_qrng_bell_certified_output
+1/1 Test #153: unit_qrng_bell_certified_output ...   Passed    0.03 sec
+
+100% tests passed out of 1
+
+Label Time Summary:
+qrng    =   0.03 sec*proc (1 test)
+
+Total Test time (real) =   0.04 sec

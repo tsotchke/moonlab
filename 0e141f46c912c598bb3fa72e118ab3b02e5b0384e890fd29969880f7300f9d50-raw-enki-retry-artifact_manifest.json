@@ -1,0 +1,22 @@
+{
+  "dirty": false,
+  "expected_target_count": 1,
+  "generated_at": "2026-09-09T02:33:23Z",
+  "git_head": "a15dabcf79a93b195ed062c6ed338cb4bc2c733b",
+  "git_tree": "1ab872e09bcc829e72e633b4115c9326fc27b358",
+  "kind": "moonlab_mesh",
+  "name": "mesh_release_smoke_green",
+  "schema": "moonlab.mesh_release_smoke.v1",
+  "source_fingerprint": "eb3448c78fa4c1a07c96d338e9f8dfc95c27f55f33625a6ba4f262a4a7b9fbbb",
+  "source_snapshot_sha256": "851f4ec9a6c7e091aa9f9a04200514316e0ac96196e5f6a6d108225c4a9e3238",
+  "target_count": 1,
+  "targets": [
+    {
+      "log": "/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z-enki-retry/logs/enki.smoke.log",
+      "log_sha256": "b2931e0e82d2f71c3b945b09b5ce0fa86010751a5e48f5eb486dd167b0911f9a",
+      "status": "PASS",
+      "target": "enki"
+    }
+  ],
+  "value": "PASS"
+}

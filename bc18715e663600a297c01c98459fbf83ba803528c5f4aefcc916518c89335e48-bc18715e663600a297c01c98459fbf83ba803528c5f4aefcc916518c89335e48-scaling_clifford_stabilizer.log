@@ -1,0 +1,6 @@
+=== scaling_stab: n=50 (GHZ + linear-cluster) ===
+=== scaling_stab: n=100 (GHZ + linear-cluster) ===
+
+=== scaling_stab summary: 329 passed, 0 divergences ===
+RESULT: PASS
+SCALING_RESULT stab new=0 known=0

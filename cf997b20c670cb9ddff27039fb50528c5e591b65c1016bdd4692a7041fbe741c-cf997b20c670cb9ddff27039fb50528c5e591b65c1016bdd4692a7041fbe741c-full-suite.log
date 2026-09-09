@@ -1,0 +1,394 @@
+Test project /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke
+        Start 184: t_dmrg
+        Start  24: unit_noise_marginals
+  1/179 Test  #24: unit_noise_marginals .....................   Passed   21.37 sec
+        Start 156: rust_bindings_smoke
+  2/179 Test #156: rust_bindings_smoke ......................   Passed    4.94 sec
+        Start  85: unit_chern_marker
+  3/179 Test #184: t_dmrg ...................................   Passed   27.70 sec
+        Start  52: unit_tdvp_adaptive_pid_stability
+  4/179 Test  #85: unit_chern_marker ........................   Passed    5.36 sec
+        Start 110: unit_topological
+  5/179 Test  #52: unit_tdvp_adaptive_pid_stability .........   Passed    5.02 sec
+        Start 166: oracle_wick_rotation
+  6/179 Test #166: oracle_wick_rotation .....................   Passed    3.81 sec
+        Start  26: unit_vqe
+  7/179 Test #110: unit_topological .........................   Passed    4.95 sec
+        Start 182: t_qft
+  8/179 Test #182: t_qft ....................................   Passed    2.25 sec
+        Start  70: unit_qgt_vs_chern_marker
+  9/179 Test  #26: unit_vqe .................................   Passed    2.95 sec
+        Start  55: unit_tdvp_bulk_site
+ 10/179 Test  #70: unit_qgt_vs_chern_marker .................   Passed    1.73 sec
+        Start 157: js_bindings_vitest
+ 11/179 Test  #55: unit_tdvp_bulk_site ......................   Passed    1.49 sec
+        Start 164: oracle_property_invariants
+ 12/179 Test #164: oracle_property_invariants ...............   Passed    1.18 sec
+        Start  88: unit_chern_fhs
+ 13/179 Test #157: js_bindings_vitest .......................   Passed    1.60 sec
+        Start 135: integration_control_plane_timeout
+ 14/179 Test  #88: unit_chern_fhs ...........................   Passed    1.16 sec
+        Start  29: unit_qaoa_gradient
+ 15/179 Test #135: integration_control_plane_timeout ........   Passed    1.23 sec
+        Start 169: example_qaoa_maxcut
+ 16/179 Test  #29: unit_qaoa_gradient .......................   Passed    0.21 sec
+        Start  40: unit_ca_mps_sample
+ 17/179 Test  #40: unit_ca_mps_sample .......................   Passed    0.86 sec
+        Start 178: stat_mlkem_timing
+ 18/179 Test #169: example_qaoa_maxcut ......................   Passed    1.22 sec
+        Start  75: unit_tn_mps_deep_forward
+ 19/179 Test #178: stat_mlkem_timing ........................   Passed    0.88 sec
+        Start  51: unit_tdvp_adaptive_tfim_ground
+ 20/179 Test  #75: unit_tn_mps_deep_forward .................   Passed    0.80 sec
+        Start 171: example_grover_hash_collision
+ 21/179 Test #171: example_grover_hash_collision ............   Passed    0.62 sec
+        Start  18: mps_vs_exact
+ 22/179 Test  #51: unit_tdvp_adaptive_tfim_ground ...........   Passed    0.82 sec
+        Start 160: oracle_backend_differential
+ 23/179 Test  #18: mps_vs_exact .............................   Passed    0.66 sec
+        Start 158: webgpu_unified_smoke
+ 24/179 Test #160: oracle_backend_differential ..............   Passed    0.77 sec
+        Start 142: integration_platform
+ 25/179 Test #142: integration_platform .....................   Passed    0.47 sec
+        Start   8: unit_token_bucket
+ 26/179 Test #158: webgpu_unified_smoke .....................   Passed    0.62 sec
+        Start  87: unit_chern_kpm
+ 27/179 Test   #8: unit_token_bucket ........................   Passed    0.37 sec
+        Start 165: oracle_analyticity
+ 28/179 Test  #87: unit_chern_kpm ...........................   Passed    0.49 sec
+        Start 137: integration_control_plane_hardening
+ 29/179 Test #165: oracle_analyticity .......................   Passed    0.31 sec
+        Start  81: unit_clifford_rowsum
+ 30/179 Test #137: integration_control_plane_hardening ......   Passed    0.37 sec
+        Start 140: unit_vendor_noise_backend
+ 31/179 Test  #81: unit_clifford_rowsum .....................   Passed    0.27 sec
+        Start 159: abi_moonlab_export
+ 32/179 Test #159: abi_moonlab_export .......................   Passed    0.22 sec
+        Start  50: unit_tdvp_adaptive_energy_conservation
+ 33/179 Test #140: unit_vendor_noise_backend ................   Passed    0.31 sec
+        Start 132: integration_control_plane_mtls
+ 34/179 Test  #50: unit_tdvp_adaptive_energy_conservation ...   Passed    0.32 sec
+        Start  28: unit_qaoa
+ 35/179 Test #132: integration_control_plane_mtls ...........   Passed    0.39 sec
+        Start  53: unit_tdvp_adaptive_second_svd
+ 36/179 Test  #28: unit_qaoa ................................   Passed    0.27 sec
+        Start 117: gpu_metal_mps_parity
+ 37/179 Test #117: gpu_metal_mps_parity .....................   Passed    0.12 sec
+        Start 151: unit_qrng_thread_safety
+ 38/179 Test  #53: unit_tdvp_adaptive_second_svd ............   Passed    0.32 sec
+        Start  58: unit_ca_mps_imag_time
+ 39/179 Test #151: unit_qrng_thread_safety ..................   Passed    0.23 sec
+        Start  49: unit_tdvp_adaptive_pid
+ 40/179 Test  #58: unit_ca_mps_imag_time ....................   Passed    0.37 sec
+        Start 128: integration_control_plane_shutdown
+ 41/179 Test  #49: unit_tdvp_adaptive_pid ...................   Passed    0.24 sec
+        Start 149: unit_hardware_entropy_probe
+ 42/179 Test #149: unit_hardware_entropy_probe ..............   Passed    0.01 sec
+        Start 172: example_quantum_spin_chain_small
+ 43/179 Test #128: integration_control_plane_shutdown .......   Passed    0.23 sec
+        Start 163: oracle_edge_matrix
+ 44/179 Test #172: example_quantum_spin_chain_small .........   Passed    0.23 sec
+        Start  27: unit_vqe_gradient_contract
+ 45/179 Test #163: oracle_edge_matrix .......................   Passed    0.21 sec
+        Start   9: unit_audit_buffer
+ 46/179 Test  #27: unit_vqe_gradient_contract ...............   Passed    0.19 sec
+        Start 131: integration_control_plane_tls
+ 47/179 Test   #9: unit_audit_buffer ........................   Passed    0.19 sec
+        Start  17: dmrg
+ 48/179 Test #131: integration_control_plane_tls ............   Passed    0.27 sec
+        Start 133: integration_control_plane_health_rate
+ 49/179 Test  #17: dmrg .....................................   Passed    0.24 sec
+        Start  62: unit_ca_mps_var_d_composite
+ 50/179 Test #133: integration_control_plane_health_rate ....   Passed    0.19 sec
+        Start   3: bell_test
+ 51/179 Test  #62: unit_ca_mps_var_d_composite ..............   Passed    0.15 sec
+        Start 141: integration_gpu_backend_correctness
+ 52/179 Test   #3: bell_test ................................   Passed    0.15 sec
+        Start  60: unit_ca_mps_var_d_large
+ 53/179 Test #141: integration_gpu_backend_correctness ......   Passed    0.20 sec
+        Start   6: unit_quantum_state
+ 54/179 Test  #60: unit_ca_mps_var_d_large ..................   Passed    0.25 sec
+        Start 177: stat_mlkem_adversarial
+ 55/179 Test   #6: unit_quantum_state .......................   Passed    0.22 sec
+        Start  66: unit_qgt_kane_mele
+ 56/179 Test #177: stat_mlkem_adversarial ...................   Passed    0.22 sec
+        Start 126: integration_control_plane_concurrent
+ 57/179 Test  #66: unit_qgt_kane_mele .......................   Passed    0.21 sec
+        Start  16: comprehensive
+ 58/179 Test #126: integration_control_plane_concurrent .....   Passed    0.17 sec
+        Start  92: unit_zne
+ 59/179 Test  #16: comprehensive ............................   Passed    0.22 sec
+        Start  99: unit_mlkem
+ 60/179 Test  #92: unit_zne .................................   Passed    0.21 sec
+        Start 174: example_ca_peps_2d_tfim_smoke
+ 61/179 Test  #99: unit_mlkem ...............................   Passed    0.23 sec
+        Start 112: unit_simd_parity
+ 62/179 Test #174: example_ca_peps_2d_tfim_smoke ............   Passed    0.23 sec
+        Start 173: example_phase3_phase4_benchmark
+ 63/179 Test #112: unit_simd_parity .........................   Passed    0.21 sec
+        Start 101: unit_mlkem_nist_kat
+ 64/179 Test #173: example_phase3_phase4_benchmark ..........   Passed    0.25 sec
+        Start 148: unit_entropy_jitter
+ 65/179 Test #101: unit_mlkem_nist_kat ......................   Passed    0.22 sec
+        Start  23: unit_noise
+ 66/179 Test #148: unit_entropy_jitter ......................   Passed    0.18 sec
+        Start  86: unit_matrix_math
+ 67/179 Test  #23: unit_noise ...............................   Passed    0.28 sec
+        Start 115: unit_measurement_edge
+ 68/179 Test  #86: unit_matrix_math .........................   Passed    0.22 sec
+        Start  15: unit_tensor_network
+ 69/179 Test #115: unit_measurement_edge ....................   Passed    0.16 sec
+        Start 161: oracle_gradient
+ 70/179 Test  #15: unit_tensor_network ......................   Passed    0.22 sec
+        Start  14: unit_simd_dispatch_portability
+ 71/179 Test #161: oracle_gradient ..........................   Passed    0.24 sec
+        Start 100: unit_aes_drbg
+ 72/179 Test  #14: unit_simd_dispatch_portability ...........   Passed    0.21 sec
+        Start   2: health_tests
+ 73/179 Test #100: unit_aes_drbg ............................   Passed    0.19 sec
+        Start   5: correlation_test
+ 74/179 Test   #2: health_tests .............................   Passed    0.22 sec
+        Start 136: integration_control_plane_ipv6
+ 75/179 Test   #5: correlation_test .........................   Passed    0.22 sec
+        Start 138: unit_decoder_bench
+ 76/179 Test #136: integration_control_plane_ipv6 ...........   Passed    0.26 sec
+        Start 167: unit_quantum_annealing
+ 77/179 Test #138: unit_decoder_bench .......................   Passed    0.26 sec
+        Start 127: integration_control_plane_shots
+ 78/179 Test #167: unit_quantum_annealing ...................   Passed    0.21 sec
+        Start  10: unit_correctness_properties
+ 79/179 Test #127: integration_control_plane_shots ..........   Passed    0.23 sec
+        Start  56: unit_ca_mps_bond_advantage
+ 80/179 Test  #10: unit_correctness_properties ..............   Passed    0.20 sec
+        Start 134: integration_control_plane_metrics
+ 81/179 Test  #56: unit_ca_mps_bond_advantage ...............   Passed    0.22 sec
+        Start  47: unit_qgt_phase_diagram_2d
+ 82/179 Test #134: integration_control_plane_metrics ........   Passed    0.25 sec
+        Start 168: example_vqe_h2_molecule
+ 83/179 Test  #47: unit_qgt_phase_diagram_2d ................   Passed    0.17 sec
+        Start  38: unit_ca_mps_vs_sv
+ 84/179 Test #168: example_vqe_h2_molecule ..................   Passed    0.17 sec
+        Start  59: unit_ca_mps_var_d
+ 85/179 Test  #38: unit_ca_mps_vs_sv ........................   Passed    0.23 sec
+        Start  89: tensor_adversarial
+ 86/179 Test  #59: unit_ca_mps_var_d ........................   Passed    0.21 sec
+        Start  61: unit_ca_mps_var_d_alt
+ 87/179 Test  #89: tensor_adversarial .......................   Passed    0.19 sec
+        Start 162: oracle_measurement_statistics
+ 88/179 Test  #61: unit_ca_mps_var_d_alt ....................   Passed    0.23 sec
+        Start  80: unit_clifford
+ 89/179 Test #162: oracle_measurement_statistics ............   Passed    0.23 sec
+        Start 113: unit_metal_parity
+ 90/179 Test  #80: unit_clifford ............................   Passed    0.21 sec
+        Start 105: unit_qgt
+ 91/179 Test #113: unit_metal_parity ........................   Passed    0.20 sec
+        Start 179: stat_entropy_health_adversarial
+ 92/179 Test #105: unit_qgt .................................   Passed    0.23 sec
+        Start  68: unit_qgt_kitaev_chain
+ 93/179 Test #179: stat_entropy_health_adversarial ..........   Passed    0.27 sec
+        Start  82: unit_fusion
+ 94/179 Test  #68: unit_qgt_kitaev_chain ....................   Passed    0.24 sec
+        Start 147: unit_entropy_sources
+ 95/179 Test  #82: unit_fusion ..............................   Passed    0.21 sec
+        Start 170: example_quantum_annealing
+ 96/179 Test #147: unit_entropy_sources .....................   Passed    0.23 sec
+        Start  42: unit_svd_compress
+ 97/179 Test #170: example_quantum_annealing ................   Passed    0.23 sec
+        Start  77: unit_tn_dead_code_smoke
+ 98/179 Test  #42: unit_svd_compress ........................   Passed    0.22 sec
+        Start  20: fast_measurement
+ 99/179 Test  #77: unit_tn_dead_code_smoke ..................   Passed    0.21 sec
+        Start  39: unit_ca_mps_prob
+100/179 Test  #20: fast_measurement .........................   Passed    0.21 sec
+        Start 152: unit_qrng_delivery
+101/179 Test  #39: unit_ca_mps_prob .........................   Passed    0.21 sec
+        Start  69: unit_qgt_hofstadter
+102/179 Test #152: unit_qrng_delivery .......................   Passed    0.21 sec
+        Start  93: unit_povm
+103/179 Test  #69: unit_qgt_hofstadter ......................   Passed    0.21 sec
+        Start  37: unit_stim_dem
+104/179 Test  #93: unit_povm ................................   Passed    0.20 sec
+        Start  25: unit_grover
+105/179 Test  #37: unit_stim_dem ............................   Passed    0.21 sec
+        Start  41: unit_qgt_kane_mele_rashba
+106/179 Test  #25: unit_grover ..............................   Passed    0.21 sec
+        Start  57: unit_ca_mps_heisenberg
+107/179 Test  #41: unit_qgt_kane_mele_rashba ................   Passed    0.23 sec
+        Start 103: unit_manifest
+108/179 Test  #57: unit_ca_mps_heisenberg ...................   Passed    0.23 sec
+        Start 125: integration_control_plane
+109/179 Test #103: unit_manifest ............................   Passed    0.21 sec
+        Start  34: unit_pauli_frame
+110/179 Test #125: integration_control_plane ................   Passed    0.23 sec
+        Start 106: unit_qgt_exact_curvature
+111/179 Test  #34: unit_pauli_frame .........................   Passed    0.23 sec
+        Start 111: unit_mbl
+112/179 Test #106: unit_qgt_exact_curvature .................   Passed    0.22 sec
+        Start  96: unit_composite_noise
+113/179 Test #111: unit_mbl .................................   Passed    0.22 sec
+        Start 130: integration_control_plane_tenant
+114/179 Test  #96: unit_composite_noise .....................   Passed    0.22 sec
+        Start  90: differentiable
+115/179 Test #130: integration_control_plane_tenant .........   Passed    0.23 sec
+        Start 185: t_eigen_lapack
+116/179 Test  #90: differentiable ...........................   Passed    0.23 sec
+        Start  48: unit_tdvp_adaptive_config
+117/179 Test #185: t_eigen_lapack ...........................   Passed    0.22 sec
+        Start  83: unit_quantum_volume
+118/179 Test  #48: unit_tdvp_adaptive_config ................   Passed    0.22 sec
+        Start  65: unit_qgt_integrators
+119/179 Test  #83: unit_quantum_volume ......................   Passed    0.22 sec
+        Start  72: unit_imag_pauli_2q_smoke
+120/179 Test  #65: unit_qgt_integrators .....................   Passed    0.22 sec
+        Start 180: differential_selftest
+121/179 Test  #72: unit_imag_pauli_2q_smoke .................   Passed    0.22 sec
+        Start  67: unit_qgt_bhz
+122/179 Test #180: differential_selftest ....................   Passed    0.22 sec
+        Start  73: unit_tn_mps_from_statevector
+123/179 Test  #67: unit_qgt_bhz .............................   Passed    0.23 sec
+        Start 118: unit_lattice_2d
+124/179 Test  #73: unit_tn_mps_from_statevector .............   Passed    0.22 sec
+        Start  91: unit_bell_variants
+125/179 Test #118: unit_lattice_2d ..........................   Passed    0.22 sec
+        Start  45: unit_hermitian_eigen
+126/179 Test  #91: unit_bell_variants .......................   Passed    0.23 sec
+        Start  30: unit_qpe
+127/179 Test  #45: unit_hermitian_eigen .....................   Passed    0.23 sec
+        Start 108: unit_gpu_eshkol
+128/179 Test  #30: unit_qpe .................................   Passed    0.23 sec
+        Start  97: unit_sha3
+129/179 Test #108: unit_gpu_eshkol ..........................   Passed    0.23 sec
+        Start   4: gate_test
+130/179 Test  #97: unit_sha3 ................................   Passed    0.22 sec
+        Start  64: unit_gauge_warmstart
+131/179 Test   #4: gate_test ................................   Passed    0.22 sec
+        Start  98: unit_mlkem_poly
+132/179 Test  #64: unit_gauge_warmstart .....................   Passed    0.23 sec
+        Start  46: unit_qgt_phase_diagram
+133/179 Test  #98: unit_mlkem_poly ..........................   Passed    0.23 sec
+        Start  71: unit_mpdo_smoke
+134/179 Test  #46: unit_qgt_phase_diagram ...................   Passed    0.23 sec
+        Start 175: example_open_core_overlay_demo
+135/179 Test  #71: unit_mpdo_smoke ..........................   Passed    0.23 sec
+        Start  78: unit_mbl_smoke
+136/179 Test #175: example_open_core_overlay_demo ...........   Passed    0.24 sec
+        Start  63: unit_z2_lgt_pauli_sum
+137/179 Test  #78: unit_mbl_smoke ...........................   Passed    0.26 sec
+        Start  76: unit_moonlab_status
+138/179 Test  #63: unit_z2_lgt_pauli_sum ....................   Passed    0.24 sec
+        Start 187: t_svd_lapack
+139/179 Test  #76: unit_moonlab_status ......................   Passed    0.23 sec
+        Start  84: unit_surface_code_clifford
+140/179 Test #187: t_svd_lapack .............................   Passed    0.23 sec
+        Start  94: unit_mutual_info
+141/179 Test  #84: unit_surface_code_clifford ...............   Passed    0.23 sec
+        Start 129: integration_control_plane_auth
+142/179 Test  #94: unit_mutual_info .........................   Passed    0.22 sec
+        Start 183: t_measure
+143/179 Test #129: integration_control_plane_auth ...........   Passed    0.22 sec
+        Start  21: unit_measurement
+144/179 Test #183: t_measure ................................   Passed    0.22 sec
+        Start 107: unit_shor_ecdlp
+145/179 Test  #21: unit_measurement .........................   Passed    0.22 sec
+        Start 116: unit_povm_cache
+146/179 Test #107: unit_shor_ecdlp ..........................   Passed    0.22 sec
+        Start  22: unit_entanglement
+147/179 Test #116: unit_povm_cache ..........................   Passed    0.22 sec
+        Start  36: unit_stim_circuit
+148/179 Test  #22: unit_entanglement ........................   Passed    0.22 sec
+        Start  33: unit_ca_peps
+149/179 Test  #36: unit_stim_circuit ........................   Passed    0.21 sec
+        Start 181: t_rotations
+150/179 Test  #33: unit_ca_peps .............................   Passed    0.22 sec
+        Start 124: unit_qgtl_circuit_io
+151/179 Test #181: t_rotations ..............................   Passed    0.22 sec
+        Start 123: unit_qgtl_backend
+152/179 Test #124: unit_qgtl_circuit_io .....................   Passed    0.22 sec
+        Start 146: unit_entropy_pool
+153/179 Test #123: unit_qgtl_backend ........................   Passed    0.22 sec
+        Start 109: unit_chemistry
+154/179 Test #146: unit_entropy_pool ........................   Passed    0.22 sec
+        Start  44: unit_tn_gate_order
+155/179 Test #109: unit_chemistry ...........................   Passed    0.22 sec
+        Start  31: unit_clifford_pauli_api
+156/179 Test  #44: unit_tn_gate_order .......................   Passed    0.22 sec
+        Start  11: unit_quantum_gates
+157/179 Test  #31: unit_clifford_pauli_api ..................   Passed    0.22 sec
+        Start  95: unit_qrng_di
+158/179 Test  #11: unit_quantum_gates .......................   Passed    0.22 sec
+        Start 145: unit_circuit_diagram
+159/179 Test  #95: unit_qrng_di .............................   Passed    0.22 sec
+        Start 122: unit_libirrep_css
+160/179 Test #145: unit_circuit_diagram .....................   Passed    0.22 sec
+        Start  74: unit_tn_mps_interior_gate
+161/179 Test #122: unit_libirrep_css ........................   Passed    0.22 sec
+        Start  32: unit_ca_mps_limits
+162/179 Test  #74: unit_tn_mps_interior_gate ................   Passed    0.22 sec
+        Start  43: unit_svd_noncanonical_axis
+163/179 Test  #32: unit_ca_mps_limits .......................   Passed    0.21 sec
+        Start  35: unit_uf_decoder
+164/179 Test  #43: unit_svd_noncanonical_axis ...............   Passed    0.21 sec
+        Start 144: unit_feynman
+165/179 Test  #35: unit_uf_decoder ..........................   Passed    0.22 sec
+        Start 143: unit_skyrmion
+166/179 Test #144: unit_feynman .............................   Passed    0.22 sec
+        Start 139: unit_scheduler
+167/179 Test #143: unit_skyrmion ............................   Passed    0.22 sec
+        Start  12: unit_memory_align
+168/179 Test  #12: unit_memory_align ........................   Passed    0.02 sec
+        Start  13: unit_simd_dispatch
+169/179 Test  #13: unit_simd_dispatch .......................   Passed    0.01 sec
+        Start   7: unit_constants
+170/179 Test   #7: unit_constants ...........................   Passed    0.01 sec
+        Start 154: python_bindings_smoke
+171/179 Test #139: unit_scheduler ...........................   Passed    0.25 sec
+        Start 153: unit_qrng_bell_certified_output
+172/179 Test #154: python_bindings_smoke ....................   Passed    0.15 sec
+        Start 102: unit_mlkem_acvp
+173/179 Test #153: unit_qrng_bell_certified_output ..........   Passed    0.15 sec
+        Start 186: t_eigen_jacobi
+174/179 Test #186: t_eigen_jacobi ...........................   Passed    0.01 sec
+        Start 188: t_svd_fallback
+175/179 Test #188: t_svd_fallback ...........................   Passed    0.01 sec
+        Start 155: bindings_version_sync
+176/179 Test #155: bindings_version_sync ....................   Passed    0.08 sec
+        Start  54: unit_tdvp_validation
+177/179 Test #102: unit_mlkem_acvp ..........................   Passed    0.21 sec
+        Start 114: gpu_sync_contract
+178/179 Test  #54: unit_tdvp_validation .....................   Passed    0.13 sec
+179/179 Test #114: gpu_sync_contract ........................   Passed    0.22 sec
+
+100% tests passed out of 179
+
+Label Time Summary:
+aarch64_flake        =   0.49 sec*proc (1 test)
+abi                  =   0.45 sec*proc (2 tests)
+algorithms           =   5.64 sec*proc (13 tests)
+bell                 =   0.38 sec*proc (2 tests)
+bindings             =   6.77 sec*proc (4 tests)
+ca_mps               =   3.85 sec*proc (14 tests)
+clifford             =  23.18 sec*proc (9 tests)
+control_plane        =   4.27 sec*proc (13 tests)
+core                 =   5.03 sec*proc (26 tests)
+crypto               =   2.68 sec*proc (9 tests)
+differential         =   0.22 sec*proc (1 test)
+distributed          =   1.04 sec*proc (3 tests)
+examples             =   3.20 sec*proc (8 tests)
+gpu                  =   1.60 sec*proc (6 tests)
+health               =   0.22 sec*proc (1 test)
+libirrep             =   0.22 sec*proc (1 test)
+noise                =   0.23 sec*proc (1 test)
+numerical            =  30.87 sec*proc (8 tests)
+oracle               =   6.74 sec*proc (7 tests)
+platform             =   0.47 sec*proc (1 test)
+qec                  =   0.26 sec*proc (1 test)
+qgtl                 =   0.44 sec*proc (2 tests)
+qrng                 =   1.68 sec*proc (9 tests)
+quantum_annealing    =   0.21 sec*proc (1 test)
+statistical          =   1.37 sec*proc (3 tests)
+tls                  =   0.66 sec*proc (2 tests)
+tn                   =   5.03 sec*proc (13 tests)
+topology             =  16.78 sec*proc (19 tests)
+viz                  =   0.65 sec*proc (3 tests)
+
+Total Test time (real) =  64.12 sec

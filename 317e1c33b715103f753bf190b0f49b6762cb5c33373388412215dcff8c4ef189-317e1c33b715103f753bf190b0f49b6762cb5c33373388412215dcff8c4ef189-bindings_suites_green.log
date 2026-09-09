@@ -1,0 +1,14 @@
+Test project /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke
+    Start 156: rust_bindings_smoke
+    Start 157: js_bindings_vitest
+1/3 Test #157: js_bindings_vitest ...............   Passed    1.40 sec
+    Start 154: python_bindings_smoke
+2/3 Test #154: python_bindings_smoke ............   Passed    0.15 sec
+3/3 Test #156: rust_bindings_smoke ..............   Passed   16.18 sec
+
+100% tests passed out of 3
+
+Label Time Summary:
+bindings    =  17.73 sec*proc (3 tests)
+
+Total Test time (real) =  16.19 sec

@@ -1,0 +1,8 @@
+=== scaling_var_d: uint32 bond-dim width (>255) ===
+=== scaling_var_d: n=8 TFIM + Heisenberg var-D ===
+=== scaling_var_d: n=16 TFIM + Heisenberg var-D ===
+=== scaling_var_d: n=32 TFIM + Heisenberg var-D ===
+
+=== scaling_var_d summary: 34 passed, 0 divergences ===
+RESULT: PASS
+SCALING_RESULT var_d new=0 known=0

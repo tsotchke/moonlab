@@ -1,0 +1,110 @@
+-- The C compiler identification is AppleClang 16.0.0.16000026
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Configuring done (0.5s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke/libirrep-stage/1446901abb6da46c0431884f6239542fba04cb61/build
+[  2%] Building C object CMakeFiles/libirrep.dir/src/bdg_skyrmion.c.o
+[  2%] Building C object CMakeFiles/libirrep.dir/src/anyon_measurement.c.o
+[  3%] Building C object CMakeFiles/libirrep.dir/src/bivariate_bicycle.c.o
+[  4%] Building C object CMakeFiles/libirrep.dir/src/bp_decoder.c.o
+[  5%] Building C object CMakeFiles/libirrep.dir/src/clebsch_gordan.c.o
+[  6%] Building C object CMakeFiles/libirrep.dir/src/color_code.c.o
+[  7%] Building C object CMakeFiles/libirrep.dir/src/color_code_3d.c.o
+[  8%] Building C object CMakeFiles/libirrep.dir/src/color_codes_2d.c.o
+[  9%] Building C object CMakeFiles/libirrep.dir/src/color_lattice_3d.c.o
+[ 11%] Building C object CMakeFiles/libirrep.dir/src/concatenated_code.c.o
+[ 11%] Building C object CMakeFiles/libirrep.dir/src/config_project.c.o
+[ 13%] Building C object CMakeFiles/libirrep.dir/src/crane_yetter.c.o
+[ 14%] Building C object CMakeFiles/libirrep.dir/src/crane_yetter_ising.c.o
+[ 15%] Building C object CMakeFiles/libirrep.dir/src/css_code.c.o
+[ 16%] Building C object CMakeFiles/libirrep.dir/src/css_floquet.c.o
+[ 17%] Building C object CMakeFiles/libirrep.dir/src/dmi.c.o
+[ 18%] Building C object CMakeFiles/libirrep.dir/src/dmi_hamiltonian.c.o
+[ 19%] Building C object CMakeFiles/libirrep.dir/src/ds3_mtc.c.o
+[ 20%] Building C object CMakeFiles/libirrep.dir/src/dzn_mtc.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke/libirrep-stage/1446901abb6da46c0431884f6239542fba04cb61/source/src/ds3_mtc.c:85:12: warning: unused variable 's3_class_of_' [-Wunused-variable]
+   85 | static int s3_class_of_[NG] = {0, 1, 1, 2, 2, 2};
+      |            ^~~~~~~~~~~~
+1 warning generated.
+[ 21%] Building C object CMakeFiles/libirrep.dir/src/equivariant_layers.c.o
+[ 22%] Building C object CMakeFiles/libirrep.dir/src/error.c.o
+[ 23%] Building C object CMakeFiles/libirrep.dir/src/fibonacci_braid_compiler.c.o
+[ 25%] Building C object CMakeFiles/libirrep.dir/src/fibonacci_braid_search.c.o
+[ 26%] Building C object CMakeFiles/libirrep.dir/src/fibonacci_fusion_tree.c.o
+[ 27%] Building C object CMakeFiles/libirrep.dir/src/fibonacci_mtc.c.o
+[ 28%] Building C object CMakeFiles/libirrep.dir/src/floquet_code.c.o
+[ 29%] Building C object CMakeFiles/libirrep.dir/src/generic_color_code.c.o
+[ 30%] Building C object CMakeFiles/libirrep.dir/src/hamiltonian.c.o
+[ 31%] Building C object CMakeFiles/libirrep.dir/src/happy_code.c.o
+[ 32%] Building C object CMakeFiles/libirrep.dir/src/happy_network.c.o
+[ 33%] Building C object CMakeFiles/libirrep.dir/src/honeycomb_floquet.c.o
+[ 34%] Building C object CMakeFiles/libirrep.dir/src/hypergraph_product.c.o
+[ 35%] Building C object CMakeFiles/libirrep.dir/src/iceberg_4_2_2.c.o
+[ 36%] Building C object CMakeFiles/libirrep.dir/src/ising_q.c.o
+[ 38%] Building C object CMakeFiles/libirrep.dir/src/lattice.c.o
+[ 39%] Building C object CMakeFiles/libirrep.dir/src/lattice3d.c.o
+[ 40%] Building C object CMakeFiles/libirrep.dir/src/lattice_surgery.c.o
+[ 41%] Building C object CMakeFiles/libirrep.dir/src/lifted_product.c.o
+[ 42%] Building C object CMakeFiles/libirrep.dir/src/magic_state_distillation.c.o
+[ 43%] Building C object CMakeFiles/libirrep.dir/src/magnon.c.o
+[ 44%] Building C object CMakeFiles/libirrep.dir/src/mtc_anomaly.c.o
+[ 45%] Building C object CMakeFiles/libirrep.dir/src/mtc_tensor_product.c.o
+[ 46%] Building C object CMakeFiles/libirrep.dir/src/multiset.c.o
+[ 47%] Building C object CMakeFiles/libirrep.dir/src/multiset_2j.c.o
+[ 48%] Building C object CMakeFiles/libirrep.dir/src/nequip.c.o
+[ 50%] Building C object CMakeFiles/libirrep.dir/src/nequip_spec.c.o
+[ 51%] Building C object CMakeFiles/libirrep.dir/src/parity.c.o
+[ 52%] Building C object CMakeFiles/libirrep.dir/src/perfect_5_1_3.c.o
+[ 53%] Building C object CMakeFiles/libirrep.dir/src/point_group.c.o
+[ 54%] Building C object CMakeFiles/libirrep.dir/src/qec_distance.c.o
+[ 55%] Building C object CMakeFiles/libirrep.dir/src/qec_simulator.c.o
+[ 56%] Building C object CMakeFiles/libirrep.dir/src/qec_threshold.c.o
+[ 57%] Building C object CMakeFiles/libirrep.dir/src/quadrature.c.o
+[ 58%] Building C object CMakeFiles/libirrep.dir/src/quantum_reed_muller.c.o
+[ 59%] Building C object CMakeFiles/libirrep.dir/src/radial.c.o
+[ 60%] Building C object CMakeFiles/libirrep.dir/src/radial_avx2.c.o
+[ 61%] Building C object CMakeFiles/libirrep.dir/src/radial_neon.c.o
+[ 63%] Building C object CMakeFiles/libirrep.dir/src/rdm.c.o
+[ 64%] Building C object CMakeFiles/libirrep.dir/src/recoupling.c.o
+[ 65%] Building C object CMakeFiles/libirrep.dir/src/rep_table.c.o
+[ 66%] Building C object CMakeFiles/libirrep.dir/src/se3.c.o
+[ 67%] Building C object CMakeFiles/libirrep.dir/src/shor_9_1_3.c.o
+[ 68%] Building C object CMakeFiles/libirrep.dir/src/simd_runtime.c.o
+[ 69%] Building C object CMakeFiles/libirrep.dir/src/single_shot.c.o
+[ 70%] Building C object CMakeFiles/libirrep.dir/src/so3.c.o
+[ 71%] Building C object CMakeFiles/libirrep.dir/src/solid_harmonics.c.o
+[ 72%] Building C object CMakeFiles/libirrep.dir/src/space_group.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke/libirrep-stage/1446901abb6da46c0431884f6239542fba04cb61/source/src/space_group.c:229:12: warning: unused function 'fill_p4gm_' [-Wunused-function]
+  229 | static int fill_p4gm_(double mats[][4], double t_frac[][2]) {
+      |            ^~~~~~~~~~
+[ 73%] Building C object CMakeFiles/libirrep.dir/src/spherical_harmonics.c.o
+1 warning generated.
+[ 75%] Building C object CMakeFiles/libirrep.dir/src/spherical_harmonics_avx2.c.o
+[ 76%] Building C object CMakeFiles/libirrep.dir/src/spherical_harmonics_neon.c.o
+[ 77%] Building C object CMakeFiles/libirrep.dir/src/spin_project.c.o
+[ 78%] Building C object CMakeFiles/libirrep.dir/src/stabilizer_group.c.o
+[ 79%] Building C object CMakeFiles/libirrep.dir/src/su2.c.o
+[ 80%] Building C object CMakeFiles/libirrep.dir/src/su2k_mtc.c.o
+[ 81%] Building C object CMakeFiles/libirrep.dir/src/subsystem_code.c.o
+[ 82%] Building C object CMakeFiles/libirrep.dir/src/surface_code.c.o
+[ 83%] Building C object CMakeFiles/libirrep.dir/src/sym_group.c.o
+[ 84%] Building C object CMakeFiles/libirrep.dir/src/tensor_product.c.o
+[ 85%] Building C object CMakeFiles/libirrep.dir/src/tensor_product_2j.c.o
+[ 86%] Building C object CMakeFiles/libirrep.dir/src/tensor_product_avx2.c.o
+[ 88%] Building C object CMakeFiles/libirrep.dir/src/tensor_product_neon.c.o
+[ 89%] Building C object CMakeFiles/libirrep.dir/src/time_reversal.c.o
+[ 90%] Building C object CMakeFiles/libirrep.dir/src/toric3d.c.o
+[ 91%] Building C object CMakeFiles/libirrep.dir/src/toric4d.c.o
+[ 92%] Building C object CMakeFiles/libirrep.dir/src/toric_code.c.o
+[ 93%] Building C object CMakeFiles/libirrep.dir/src/toric_mtc.c.o
+[ 94%] Building C object CMakeFiles/libirrep.dir/src/version.c.o
+[ 95%] Building C object CMakeFiles/libirrep.dir/src/wigner_d.c.o
+[ 96%] Building C object CMakeFiles/libirrep.dir/src/wigner_d_avx2.c.o
+[ 97%] Building C object CMakeFiles/libirrep.dir/src/wigner_d_neon.c.o
+[ 98%] Building C object CMakeFiles/libirrep.dir/src/xcube_code.c.o
+[100%] Linking C static library liblibirrep.a
+[100%] Built target libirrep

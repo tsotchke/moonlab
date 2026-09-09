@@ -1,0 +1,10 @@
+=== scaling_diff: corpus /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-scaling/corpus/corpus.txt  version=1 seed=1554062102 cases=109 ===
+
+=== scaling_diff summary ===
+cases            : 109
+checks passed    : 526
+tn legs skipped  : 72 (n > --tn-max-n)
+KNOWN divergences: 0 (no quarantine)
+NEW   divergences: 0
+RESULT: PASS
+SCALING_RESULT diff new=0 known=0

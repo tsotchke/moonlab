@@ -1,0 +1,19 @@
+=== Sharded MPI+CUDA GHZ demo: N=12 across 4 ranks ===
+    total amplitudes: 2^12 = 4096
+    per-rank GPU mem: 0.02 MB
+    per-rank host staging+halos: 2048.02 MB
+    configured comm buffer: 1024.00 MB
+    rank 2/4 host=georefine-rtxpro-spot-b.us-central1-b.c.georefine.internal local_rank=0 CUDA device=0/1 shard=[2048,3072)
+    rank 3/4 host=georefine-rtxpro-spot-b.us-central1-b.c.georefine.internal local_rank=1 CUDA device=0/1 shard=[3072,4096)
+    rank 1/4 host=georefine-rtxpro-spot-c.us-west1-a.c.georefine.internal local_rank=1 CUDA device=0/1 shard=[1024,2048)
+    rank 0/4 host=georefine-rtxpro-spot-c.us-west1-a.c.georefine.internal local_rank=0 CUDA device=0/1 shard=[0,1024)
+
+    simulation time:  0.0482 s (wall, rank 0)
+    P(|0...0>) = 0.500000  (rank 0)
+    P(|1...1>) = 0.500000  (rank 3, reduced)
+    expected   = 0.500000 each
+
+    GHZ verified: sharded MPI+CUDA at N=12, 4 ranks.
+    Local gates ran on GPU; cross-partition CNOTs used
+    the GPU->host->MPI->host->GPU sync path.
+MOONLAB_MPI_SHARDED_GPU PASS n=12 ranks=4 hosts=2 host_slots_2x2=1 gpu_endpoints=2 halo_swaps=2 local_qubits=10

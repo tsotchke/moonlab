@@ -1,0 +1,10 @@
+Test project /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-moonlab-release-smoke
+    Start 54: unit_tdvp_validation
+1/1 Test #54: unit_tdvp_validation .............   Passed    0.01 sec
+
+100% tests passed out of 1
+
+Label Time Summary:
+tn    =   0.01 sec*proc (1 test)
+
+Total Test time (real) =   0.01 sec

@@ -1,0 +1,850 @@
+target=cosbox
+Linux 6.8.0-138-generic x86_64 GNU/Linux
+cmake version 3.28.3
+ctest version 3.28.3
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Platform: Linux (x86_64)
+-- Performing Test HAVE_WNO_ERROR_discarded_qualifiers
+-- Performing Test HAVE_WNO_ERROR_discarded_qualifiers - Success
+-- Performing Test HAVE_WNO_ERROR_switch_unreachable
+-- Performing Test HAVE_WNO_ERROR_switch_unreachable - Success
+-- Performing Test HAVE_WNO_ERROR_ignored_qualifiers
+-- Performing Test HAVE_WNO_ERROR_ignored_qualifiers - Success
+-- Performing Test HAVE_WNO_ERROR_unused_but_set_variable
+-- Performing Test HAVE_WNO_ERROR_unused_but_set_variable - Success
+-- Performing Test HAVE_WNO_ERROR_format_truncation
+-- Performing Test HAVE_WNO_ERROR_format_truncation - Success
+-- Performing Test HAVE_WNO_ERROR_unknown_pragmas
+-- Performing Test HAVE_WNO_ERROR_unknown_pragmas - Success
+-- Performing Test HAVE_WNO_ERROR_nan_infinity_disabled
+-- Performing Test HAVE_WNO_ERROR_nan_infinity_disabled - Failed
+-- Performing Test HAVE_WNO_ERROR_strict_aliasing
+-- Performing Test HAVE_WNO_ERROR_strict_aliasing - Success
+-- Performing Test HAVE_WNO_ERROR_unused_result
+-- Performing Test HAVE_WNO_ERROR_unused_result - Success
+-- Performing Test HAVE_WNO_ERROR_overlength_strings
+-- Performing Test HAVE_WNO_ERROR_overlength_strings - Success
+-- Performing Test HAVE_WNO_ERROR_missing_braces
+-- Performing Test HAVE_WNO_ERROR_missing_braces - Success
+-- Performing Test HAVE_WNO_ERROR_implicit_fallthrough
+-- Performing Test HAVE_WNO_ERROR_implicit_fallthrough - Success
+-- Performing Test HAVE_WNO_ERROR_address
+-- Performing Test HAVE_WNO_ERROR_address - Success
+-- Performing Test HAVE_WNO_ERROR_stringop_truncation
+-- Performing Test HAVE_WNO_ERROR_stringop_truncation - Success
+-- Performing Test QSIM_HAS_AVX512F_FLAG
+-- Performing Test QSIM_HAS_AVX512F_FLAG - Success
+-- Performing Test QSIM_HAS_AVX512
+-- Performing Test QSIM_HAS_AVX512 - Failed
+-- AVX-512: Not supported by CPU
+-- Performing Test QSIM_HAS_AVX2_FLAG
+-- Performing Test QSIM_HAS_AVX2_FLAG - Success
+-- Performing Test QSIM_HAS_AVX2
+-- Performing Test QSIM_HAS_AVX2 - Success
+-- AVX2: Available
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Found OpenMP_C: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- OpenMP: Found (version 4.5)
+-- CUDA: arch normalized -> 86-real
+-- Looking for a CUDA compiler
+-- Looking for a CUDA compiler - /usr/bin/nvcc
+-- The CUDA compiler identification is NVIDIA 12.0.140
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Found CUDAToolkit: /usr/include (found version "12.0.140") 
+-- CUDA: Found (version 12.0.140)
+-- cuQuantum: not found (OK -- only QSIM_ENABLE_CUDA was set; moonlab CUDA backend works without it)
+-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.13")  
+-- OpenSSL: 3.0.13 at /usr/include
+-- Performing Test QSIM_LINKER_SUPPORTS_NODELETE
+-- Performing Test QSIM_LINKER_SUPPORTS_NODELETE - Success
+-- LAPACK: LAPACKE=/usr/lib/x86_64-linux-gnu/liblapacke.so LAPACK=/usr/lib/x86_64-linux-gnu/liblapack.so BLAS=/usr/lib/x86_64-linux-gnu/libblas.so
+-- LTO: Enabled
+-- Rust bindings smoke: skipped (requires Cargo/rustc 1.86+; found cargo='cargo 1.75.0', rustc='rustc 1.75.0 (82e1608df 2023-12-21) (built from a source tarball)')
+-- Tests: Enabled
+-- tests/statistical: 4 adversarial targets registered (labels: statistical, crypto)
+-- differential: linking in-tree quantumsim target
+-- numerical: linking in-tree quantumsim target
+-- 
+-- ========================================
+-- Quantum Simulator Configuration Summary
+-- ========================================
+-- Version:      1.2.1
+-- Platform:     Linux
+-- Architecture: x86_64
+-- Build Type:   Release
+-- 
+-- SIMD Features:
+--   AVX-512:    
+--   AVX2:       ON
+--   NEON:       
+--   SVE:        
+-- 
+-- Optional Features:
+--   OpenMP:     ON
+--   Accelerate: 
+--   Metal:      
+--   OpenCL:     
+--   Vulkan:     
+--   CUDA:       ON
+--   cuQuantum:  
+--   MPI:        
+-- ========================================
+-- 
+-- Configuring done (19.0s)
+-- Generating done (0.4s)
+-- Build files have been written to: /home/tyr/moonlab-v121-mesh-20260909T022230Z/build-mesh-release-smoke
+[  0%] Building C object CMakeFiles/hw_rng_probe.dir/tools/hw_rng_probe.c.o
+[  0%] Linking C executable hw_rng_probe
+[  0%] Built target hw_rng_probe
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/state.c.o
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/gates.c.o
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/measurement.c.o
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/entanglement.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/quantum/noise.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/quantum/noise_mpdo.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/backends/clifford/clifford.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/backends/clifford/pauli_frame.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/qec/uf_decoder.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/qec/stim_circuit.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/qec/stim_dem.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/grover.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/grover_optimizer.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/quantum_rng.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/bell_tests.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/qaoa.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/quantum_annealing.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/qpe.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/vqe.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/h2_sto3g.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/vqe_qng.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tensor.c.o
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tn_state.c.o
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tn_gates.c.o
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tn_measurement.c.o
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/algorithms/tensor_network/tn_measurement.c: In function 'tn_expectation_z':
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/algorithms/tensor_network/tn_measurement.c:751:19: warning: unused variable 'backend' [-Wunused-variable]
+  751 |         const int backend = tensor_gpu_backend_code_measure();
+      |                   ^~~~~~~
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/algorithms/tensor_network/tn_measurement.c: At top level:
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/algorithms/tensor_network/tn_measurement.c:69:15: warning: 'quiet_nan_value' defined but not used [-Wunused-function]
+   69 | static double quiet_nan_value(void) {
+      |               ^~~~~~~~~~~~~~~
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/contraction.c.o
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/svd_compress.c.o
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/dmrg.c.o
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tdvp.c.o
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/mpo_2d.c.o
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/lattice_2d.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/skyrmion_braiding.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_mps.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_mps_var_d.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_peps.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/chemistry/chemistry.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topological/topological.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topological/braid_compiler.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/chern_marker.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/chern_kpm.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/chern_fhs.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/mpo_kpm.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/quantum_geometry/qgt.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/shor_ecdlp/shor_ecdlp.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/diff/differentiable.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/mitigation/zne.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/crypto/sha3/sha3.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/crypto/mlkem/poly.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/crypto/mlkem/mlkem.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/crypto/aes/aes.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/crypto/drbg/ctr_drbg.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/mbl/mbl.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/visualization/circuit_diagram.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/visualization/feynman_diagram.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/memory_align.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/simd_dispatch.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/simd_ops.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/parallel_ops.c.o
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/accelerate_ops.c.o
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/optimization/accelerate_ops.c: In function 'accelerate_complex_scale':
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/optimization/accelerate_ops.c:313:12: warning: unused variable 'scalar_real' [-Wunused-variable]
+  313 |     double scalar_real = creal(scalar);
+      |            ^~~~~~~~~~~
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/fusion/fusion.c.o
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/optimization/fusion/fusion.c: In function 'fuse_execute':
+/home/tyr/moonlab-v121-mesh-20260909T022230Z/src/optimization/fusion/fusion.c:320:62: warning: invalid use of pointers to arrays with different qualifiers in ISO C before C2X [-Wpedantic]
+  320 |                 rc = apply_single_qubit_gate(state, g->q[0], m);
+      |                                                              ^
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/gpu/gpu_backend.c.o
+[ 13%] Building CUDA object CMakeFiles/quantumsim.dir/src/optimization/gpu/backends/gpu_cuda.cu.o
+[ 13%] Building CXX object CMakeFiles/quantumsim.dir/src/optimization/gpu/backends/gpu_eshkol.cpp.o
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/entropy.c.o
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/config.c.o
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/matrix_math.c.o
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/manifest.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/quantum_entropy.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/moonlab_status.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/token_bucket.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/audit_buffer.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/integration/libirrep_bridge.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/health_tests.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/bell_test.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/entropy_pool.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/hardware_entropy.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/qrng.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/qrng_di.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_qrng_export.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_export_lean.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_tdvp_export.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_vqe_export.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_anneal_export.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_qgtl_backend.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/decoder_bench.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/mwpm_exact.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/vendor_noise_backend.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/distributed/scheduler.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/nist_sp800_22.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/quantum_volume.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/hep/lattice_z2_1d.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/control/control_plane.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/tools/profiler/profiler.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/utils/performance_monitor.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/backends/cuda_tegra_probe.c.o
+[ 21%] Building CUDA object CMakeFiles/quantumsim.dir/src/backends/cuda_statevec.cu.o
+[ 21%] Building CUDA object CMakeFiles/quantumsim.dir/src/quantum/state_gpu.cu.o
+[ 21%] Linking CXX shared library libquantumsim.so
+[ 21%] Built target quantumsim
+[ 21%] Building C object CMakeFiles/moonlab-control-server.dir/tools/moonlab-control-server.c.o
+[ 22%] Linking C executable moonlab-control-server
+[ 22%] Built target moonlab-control-server
+[ 22%] Building C object CMakeFiles/qsim_test.dir/tests/quantum_sim_test.c.o
+[ 23%] Linking C executable qsim_test
+[ 23%] Built target qsim_test
+[ 23%] Building C object CMakeFiles/health_tests_test.dir/tests/health_tests_test.c.o
+[ 24%] Linking C executable health_tests_test
+[ 24%] Built target health_tests_test
+[ 24%] Building C object CMakeFiles/bell_test_demo.dir/tests/bell_test_demo.c.o
+[ 24%] Linking C executable bell_test_demo
+[ 24%] Built target bell_test_demo
+[ 24%] Building C object CMakeFiles/gate_test.dir/tests/gate_test.c.o
+[ 24%] Linking C executable gate_test
+[ 24%] Built target gate_test
+[ 24%] Building C object CMakeFiles/correlation_test.dir/tests/correlation_test.c.o
+[ 24%] Linking C executable correlation_test
+[ 24%] Built target correlation_test
+[ 24%] Building C object CMakeFiles/test_quantum_state.dir/tests/unit/test_quantum_state.c.o
+[ 24%] Linking C executable test_quantum_state
+[ 24%] Built target test_quantum_state
+[ 24%] Building C object CMakeFiles/test_constants.dir/tests/unit/test_constants.c.o
+[ 24%] Linking C executable test_constants
+[ 24%] Built target test_constants
+[ 24%] Building C object CMakeFiles/test_token_bucket.dir/tests/unit/test_token_bucket.c.o
+[ 24%] Linking C executable test_token_bucket
+[ 24%] Built target test_token_bucket
+[ 25%] Building C object CMakeFiles/test_audit_buffer.dir/tests/unit/test_audit_buffer.c.o
+[ 25%] Linking C executable test_audit_buffer
+[ 25%] Built target test_audit_buffer
+[ 25%] Building C object CMakeFiles/test_correctness_properties.dir/tests/unit/test_correctness_properties.c.o
+[ 25%] Linking C executable test_correctness_properties
+[ 25%] Built target test_correctness_properties
+[ 26%] Building C object CMakeFiles/test_quantum_gates.dir/tests/unit/test_quantum_gates.c.o
+[ 26%] Linking C executable test_quantum_gates
+[ 26%] Built target test_quantum_gates
+[ 26%] Building C object CMakeFiles/test_memory_align.dir/tests/unit/test_memory_align.c.o
+[ 27%] Building C object CMakeFiles/test_memory_align.dir/src/optimization/memory_align.c.o
+[ 27%] Linking C executable test_memory_align
+[ 27%] Built target test_memory_align
+[ 27%] Building C object CMakeFiles/test_simd_dispatch.dir/tests/unit/test_simd_dispatch.c.o
+[ 27%] Building C object CMakeFiles/test_simd_dispatch.dir/src/optimization/simd_dispatch.c.o
+[ 28%] Linking C executable test_simd_dispatch
+[ 28%] Built target test_simd_dispatch
+[ 28%] Building C object CMakeFiles/test_simd_dispatch_portability.dir/tests/unit/test_simd_dispatch_portability.c.o
+[ 28%] Linking C executable test_simd_dispatch_portability
+[ 28%] Built target test_simd_dispatch_portability
+[ 28%] Building C object CMakeFiles/test_tensor_network.dir/tests/unit/test_tensor_network.c.o
+[ 28%] Linking C executable test_tensor_network
+[ 28%] Built target test_tensor_network
+[ 28%] Building C object CMakeFiles/test_comprehensive.dir/tests/test_comprehensive.c.o
+[ 29%] Linking C executable test_comprehensive
+[ 29%] Built target test_comprehensive
+[ 29%] Building C object CMakeFiles/test_dmrg.dir/tests/test_dmrg.c.o
+[ 29%] Linking C executable test_dmrg
+[ 29%] Built target test_dmrg
+[ 29%] Building C object CMakeFiles/test_mps_vs_exact.dir/tests/test_mps_vs_exact.c.o
+[ 29%] Linking C executable test_mps_vs_exact
+[ 29%] Built target test_mps_vs_exact
+[ 29%] Building C object CMakeFiles/test_long_evolution.dir/tests/test_long_evolution.c.o
+[ 29%] Linking C executable test_long_evolution
+[ 29%] Built target test_long_evolution
+[ 29%] Building C object CMakeFiles/test_fast_measurement.dir/tests/test_fast_measurement.c.o
+[ 29%] Linking C executable test_fast_measurement
+[ 29%] Built target test_fast_measurement
+[ 29%] Building C object CMakeFiles/test_measurement.dir/tests/unit/test_measurement.c.o
+[ 29%] Linking C executable test_measurement
+[ 29%] Built target test_measurement
+[ 29%] Building C object CMakeFiles/test_entanglement.dir/tests/unit/test_entanglement.c.o
+[ 29%] Linking C executable test_entanglement
+[ 29%] Built target test_entanglement
+[ 29%] Building C object CMakeFiles/test_noise.dir/tests/unit/test_noise.c.o
+[ 29%] Linking C executable test_noise
+[ 29%] Built target test_noise
+[ 30%] Building C object CMakeFiles/test_noise_marginals.dir/tests/unit/test_noise_marginals.c.o
+[ 30%] Linking C executable test_noise_marginals
+[ 30%] Built target test_noise_marginals
+[ 30%] Building C object CMakeFiles/test_grover.dir/tests/unit/test_grover.c.o
+[ 30%] Linking C executable test_grover
+[ 30%] Built target test_grover
+[ 31%] Building C object CMakeFiles/test_vqe.dir/tests/unit/test_vqe.c.o
+[ 31%] Linking C executable test_vqe
+[ 31%] Built target test_vqe
+[ 31%] Building C object CMakeFiles/test_vqe_gradient_contract.dir/tests/unit/test_vqe_gradient_contract.c.o
+[ 31%] Linking C executable test_vqe_gradient_contract
+[ 31%] Built target test_vqe_gradient_contract
+[ 31%] Building C object CMakeFiles/test_qaoa.dir/tests/unit/test_qaoa.c.o
+[ 31%] Linking C executable test_qaoa
+[ 31%] Built target test_qaoa
+[ 32%] Building C object CMakeFiles/test_qaoa_gradient.dir/tests/unit/test_qaoa_gradient.c.o
+[ 32%] Linking C executable test_qaoa_gradient
+[ 32%] Built target test_qaoa_gradient
+[ 33%] Building C object CMakeFiles/test_qpe.dir/tests/unit/test_qpe.c.o
+[ 33%] Linking C executable test_qpe
+[ 33%] Built target test_qpe
+[ 33%] Building C object CMakeFiles/test_clifford_pauli_api.dir/tests/unit/test_clifford_pauli_api.c.o
+[ 33%] Linking C executable test_clifford_pauli_api
+[ 33%] Built target test_clifford_pauli_api
+[ 34%] Building C object CMakeFiles/test_ca_mps_limits.dir/tests/unit/test_ca_mps_limits.c.o
+[ 34%] Linking C executable test_ca_mps_limits
+[ 34%] Built target test_ca_mps_limits
+[ 34%] Building C object CMakeFiles/test_ca_peps.dir/tests/unit/test_ca_peps.c.o
+[ 34%] Linking C executable test_ca_peps
+[ 34%] Built target test_ca_peps
+[ 34%] Building C object CMakeFiles/test_pauli_frame.dir/tests/unit/test_pauli_frame.c.o
+[ 34%] Linking C executable test_pauli_frame
+[ 34%] Built target test_pauli_frame
+[ 35%] Building C object CMakeFiles/test_uf_decoder.dir/tests/unit/test_uf_decoder.c.o
+[ 35%] Linking C executable test_uf_decoder
+[ 35%] Built target test_uf_decoder
+[ 35%] Building C object CMakeFiles/test_stim_circuit.dir/tests/unit/test_stim_circuit.c.o
+[ 35%] Linking C executable test_stim_circuit
+[ 35%] Built target test_stim_circuit
+[ 36%] Building C object CMakeFiles/test_stim_dem.dir/tests/unit/test_stim_dem.c.o
+[ 36%] Linking C executable test_stim_dem
+[ 36%] Built target test_stim_dem
+[ 36%] Building C object CMakeFiles/test_ca_mps_vs_sv.dir/tests/unit/test_ca_mps_vs_sv.c.o
+[ 36%] Linking C executable test_ca_mps_vs_sv
+[ 36%] Built target test_ca_mps_vs_sv
+[ 36%] Building C object CMakeFiles/test_ca_mps_prob.dir/tests/unit/test_ca_mps_prob.c.o
+[ 36%] Linking C executable test_ca_mps_prob
+[ 36%] Built target test_ca_mps_prob
+[ 37%] Building C object CMakeFiles/test_ca_mps_sample.dir/tests/unit/test_ca_mps_sample.c.o
+[ 37%] Linking C executable test_ca_mps_sample
+[ 37%] Built target test_ca_mps_sample
+[ 38%] Building C object CMakeFiles/test_qgt_kane_mele_rashba.dir/tests/unit/test_qgt_kane_mele_rashba.c.o
+[ 38%] Linking C executable test_qgt_kane_mele_rashba
+[ 38%] Built target test_qgt_kane_mele_rashba
+[ 38%] Building C object CMakeFiles/test_svd_compress.dir/tests/unit/test_svd_compress.c.o
+[ 39%] Linking C executable test_svd_compress
+[ 39%] Built target test_svd_compress
+[ 39%] Building C object CMakeFiles/test_svd_noncanonical_axis.dir/tests/unit/test_svd_noncanonical_axis.c.o
+[ 39%] Linking C executable test_svd_noncanonical_axis
+[ 39%] Built target test_svd_noncanonical_axis
+[ 39%] Building C object CMakeFiles/test_tn_gate_order.dir/tests/unit/test_tn_gate_order.c.o
+[ 39%] Linking C executable test_tn_gate_order
+[ 39%] Built target test_tn_gate_order
+[ 39%] Building C object CMakeFiles/test_hermitian_eigen.dir/tests/unit/test_hermitian_eigen.c.o
+[ 39%] Linking C executable test_hermitian_eigen
+[ 39%] Built target test_hermitian_eigen
+[ 39%] Building C object CMakeFiles/test_qgt_phase_diagram.dir/tests/unit/test_qgt_phase_diagram.c.o
+[ 40%] Linking C executable test_qgt_phase_diagram
+[ 40%] Built target test_qgt_phase_diagram
+[ 40%] Building C object CMakeFiles/test_qgt_phase_diagram_2d.dir/tests/unit/test_qgt_phase_diagram_2d.c.o
+[ 40%] Linking C executable test_qgt_phase_diagram_2d
+[ 40%] Built target test_qgt_phase_diagram_2d
+[ 40%] Building C object CMakeFiles/test_tdvp_adaptive_config.dir/tests/unit/test_tdvp_adaptive_config.c.o
+[ 41%] Linking C executable test_tdvp_adaptive_config
+[ 41%] Built target test_tdvp_adaptive_config
+[ 41%] Building C object CMakeFiles/test_tdvp_adaptive_pid.dir/tests/unit/test_tdvp_adaptive_pid.c.o
+[ 41%] Linking C executable test_tdvp_adaptive_pid
+[ 41%] Built target test_tdvp_adaptive_pid
+[ 41%] Building C object CMakeFiles/test_tdvp_adaptive_energy_conservation.dir/tests/unit/test_tdvp_adaptive_energy_conservation.c.o
+[ 41%] Linking C executable test_tdvp_adaptive_energy_conservation
+[ 41%] Built target test_tdvp_adaptive_energy_conservation
+[ 42%] Building C object CMakeFiles/test_tdvp_adaptive_tfim_ground.dir/tests/unit/test_tdvp_adaptive_tfim_ground.c.o
+[ 42%] Linking C executable test_tdvp_adaptive_tfim_ground
+[ 42%] Built target test_tdvp_adaptive_tfim_ground
+[ 43%] Building C object CMakeFiles/test_tdvp_adaptive_pid_stability.dir/tests/unit/test_tdvp_adaptive_pid_stability.c.o
+[ 43%] Linking C executable test_tdvp_adaptive_pid_stability
+[ 43%] Built target test_tdvp_adaptive_pid_stability
+[ 43%] Building C object CMakeFiles/test_tdvp_adaptive_second_svd.dir/tests/unit/test_tdvp_adaptive_second_svd.c.o
+[ 43%] Linking C executable test_tdvp_adaptive_second_svd
+[ 43%] Built target test_tdvp_adaptive_second_svd
+[ 43%] Building C object CMakeFiles/test_tdvp_validation.dir/tests/unit/test_tdvp_validation.c.o
+[ 44%] Linking C executable test_tdvp_validation
+[ 44%] Built target test_tdvp_validation
+[ 44%] Building C object CMakeFiles/test_tdvp_bulk_site.dir/tests/unit/test_tdvp_bulk_site.c.o
+[ 44%] Linking C executable test_tdvp_bulk_site
+[ 44%] Built target test_tdvp_bulk_site
+[ 44%] Building C object CMakeFiles/test_ca_mps_bond_advantage.dir/tests/unit/test_ca_mps_bond_advantage.c.o
+[ 44%] Linking C executable test_ca_mps_bond_advantage
+[ 44%] Built target test_ca_mps_bond_advantage
+[ 44%] Building C object CMakeFiles/test_ca_mps_heisenberg.dir/tests/unit/test_ca_mps_heisenberg.c.o
+[ 45%] Linking C executable test_ca_mps_heisenberg
+[ 45%] Built target test_ca_mps_heisenberg
+[ 45%] Building C object CMakeFiles/test_ca_mps_imag_time.dir/tests/unit/test_ca_mps_imag_time.c.o
+[ 45%] Linking C executable test_ca_mps_imag_time
+[ 45%] Built target test_ca_mps_imag_time
+[ 45%] Building C object CMakeFiles/test_ca_mps_var_d.dir/tests/unit/test_ca_mps_var_d.c.o
+[ 45%] Linking C executable test_ca_mps_var_d
+[ 45%] Built target test_ca_mps_var_d
+[ 45%] Building C object CMakeFiles/test_ca_mps_var_d_large.dir/tests/unit/test_ca_mps_var_d_large.c.o
+[ 46%] Linking C executable test_ca_mps_var_d_large
+[ 46%] Built target test_ca_mps_var_d_large
+[ 46%] Building C object CMakeFiles/test_ca_mps_var_d_alt.dir/tests/unit/test_ca_mps_var_d_alt.c.o
+[ 47%] Linking C executable test_ca_mps_var_d_alt
+[ 47%] Built target test_ca_mps_var_d_alt
+[ 47%] Building C object CMakeFiles/test_ca_mps_var_d_composite.dir/tests/unit/test_ca_mps_var_d_composite.c.o
+[ 47%] Linking C executable test_ca_mps_var_d_composite
+[ 47%] Built target test_ca_mps_var_d_composite
+[ 47%] Building C object CMakeFiles/test_z2_lgt_pauli_sum.dir/tests/unit/test_z2_lgt_pauli_sum.c.o
+[ 47%] Linking C executable test_z2_lgt_pauli_sum
+[ 47%] Built target test_z2_lgt_pauli_sum
+[ 47%] Building C object CMakeFiles/test_gauge_warmstart.dir/tests/unit/test_gauge_warmstart.c.o
+[ 47%] Linking C executable test_gauge_warmstart
+[ 47%] Built target test_gauge_warmstart
+[ 47%] Building C object CMakeFiles/test_qgt_integrators.dir/tests/unit/test_qgt_integrators.c.o
+[ 47%] Linking C executable test_qgt_integrators
+[ 47%] Built target test_qgt_integrators
+[ 47%] Building C object CMakeFiles/test_qgt_kane_mele.dir/tests/unit/test_qgt_kane_mele.c.o
+[ 47%] Linking C executable test_qgt_kane_mele
+[ 47%] Built target test_qgt_kane_mele
+[ 47%] Building C object CMakeFiles/test_qgt_bhz.dir/tests/unit/test_qgt_bhz.c.o
+[ 48%] Linking C executable test_qgt_bhz
+[ 48%] Built target test_qgt_bhz
+[ 48%] Building C object CMakeFiles/test_qgt_kitaev_chain.dir/tests/unit/test_qgt_kitaev_chain.c.o
+[ 48%] Linking C executable test_qgt_kitaev_chain
+[ 48%] Built target test_qgt_kitaev_chain
+[ 48%] Building C object CMakeFiles/test_qgt_hofstadter.dir/tests/unit/test_qgt_hofstadter.c.o
+[ 49%] Linking C executable test_qgt_hofstadter
+[ 49%] Built target test_qgt_hofstadter
+[ 49%] Building C object CMakeFiles/test_qgt_vs_chern_marker.dir/tests/unit/test_qgt_vs_chern_marker.c.o
+[ 50%] Linking C executable test_qgt_vs_chern_marker
+[ 50%] Built target test_qgt_vs_chern_marker
+[ 50%] Building C object CMakeFiles/test_mpdo_smoke.dir/tests/unit/test_mpdo_smoke.c.o
+[ 51%] Linking C executable test_mpdo_smoke
+[ 51%] Built target test_mpdo_smoke
+[ 51%] Building C object CMakeFiles/test_imag_pauli_2q_smoke.dir/tests/unit/test_imag_pauli_2q_smoke.c.o
+[ 51%] Linking C executable test_imag_pauli_2q_smoke
+[ 51%] Built target test_imag_pauli_2q_smoke
+[ 51%] Building C object CMakeFiles/test_tn_mps_from_statevector.dir/tests/unit/test_tn_mps_from_statevector.c.o
+[ 51%] Linking C executable test_tn_mps_from_statevector
+[ 51%] Built target test_tn_mps_from_statevector
+[ 51%] Building C object CMakeFiles/test_tn_mps_interior_gate.dir/tests/unit/test_tn_mps_interior_gate.c.o
+[ 52%] Linking C executable test_tn_mps_interior_gate
+[ 52%] Built target test_tn_mps_interior_gate
+[ 53%] Building C object CMakeFiles/test_tn_mps_deep_forward.dir/tests/unit/test_tn_mps_deep_forward.c.o
+[ 53%] Linking C executable test_tn_mps_deep_forward
+[ 53%] Built target test_tn_mps_deep_forward
+[ 53%] Building C object CMakeFiles/test_moonlab_status.dir/tests/unit/test_moonlab_status.c.o
+[ 53%] Linking C executable test_moonlab_status
+[ 53%] Built target test_moonlab_status
+[ 54%] Building C object CMakeFiles/test_tn_dead_code_smoke.dir/tests/unit/test_tn_dead_code_smoke.c.o
+[ 54%] Linking C executable test_tn_dead_code_smoke
+[ 54%] Built target test_tn_dead_code_smoke
+[ 55%] Building C object CMakeFiles/test_mbl_smoke.dir/tests/unit/test_mbl_smoke.c.o
+[ 55%] Linking C executable test_mbl_smoke
+[ 55%] Built target test_mbl_smoke
+[ 55%] Building C object CMakeFiles/test_ca_mps_kagome12.dir/tests/unit/test_ca_mps_kagome12.c.o
+[ 55%] Linking C executable test_ca_mps_kagome12
+[ 55%] Built target test_ca_mps_kagome12
+[ 55%] Building C object CMakeFiles/test_clifford.dir/tests/unit/test_clifford.c.o
+[ 55%] Linking C executable test_clifford
+[ 55%] Built target test_clifford
+[ 56%] Building C object CMakeFiles/test_clifford_rowsum.dir/tests/unit/test_clifford_rowsum.c.o
+[ 56%] Linking C executable test_clifford_rowsum
+[ 56%] Built target test_clifford_rowsum
+[ 57%] Building C object CMakeFiles/test_fusion.dir/tests/unit/test_fusion.c.o
+[ 57%] Linking C executable test_fusion
+[ 57%] Built target test_fusion
+[ 58%] Building C object CMakeFiles/test_quantum_volume.dir/tests/unit/test_quantum_volume.c.o
+[ 58%] Linking C executable test_quantum_volume
+[ 58%] Built target test_quantum_volume
+[ 58%] Building C object CMakeFiles/test_surface_code_clifford.dir/tests/unit/test_surface_code_clifford.c.o
+[ 58%] Linking C executable test_surface_code_clifford
+[ 58%] Built target test_surface_code_clifford
+[ 58%] Building C object CMakeFiles/test_chern_marker.dir/tests/unit/test_chern_marker.c.o
+[ 58%] Linking C executable test_chern_marker
+[ 58%] Built target test_chern_marker
+[ 59%] Building C object CMakeFiles/test_matrix_math.dir/tests/unit/test_matrix_math.c.o
+[ 59%] Linking C executable test_matrix_math
+[ 59%] Built target test_matrix_math
+[ 59%] Building C object CMakeFiles/test_chern_kpm.dir/tests/unit/test_chern_kpm.c.o
+[ 60%] Linking C executable test_chern_kpm
+[ 60%] Built target test_chern_kpm
+[ 60%] Building C object CMakeFiles/test_chern_fhs.dir/tests/unit/test_chern_fhs.c.o
+[ 60%] Linking C executable test_chern_fhs
+[ 60%] Built target test_chern_fhs
+[ 60%] Building C object CMakeFiles/test_mpo_kpm.dir/tests/unit/test_mpo_kpm.c.o
+[ 60%] Linking C executable test_mpo_kpm
+[ 60%] Built target test_mpo_kpm
+[ 60%] Building C object CMakeFiles/test_gpu_backend_discovery.dir/tests/unit/test_gpu_backend_discovery.c.o
+[ 60%] Linking C executable test_gpu_backend_discovery
+[ 60%] Built target test_gpu_backend_discovery
+[ 60%] Building C object CMakeFiles/test_tensor_adversarial.dir/tests/unit/test_tensor_adversarial.c.o
+[ 60%] Linking C executable test_tensor_adversarial
+[ 60%] Built target test_tensor_adversarial
+[ 60%] Building C object CMakeFiles/test_differentiable.dir/tests/unit/test_differentiable.c.o
+[ 60%] Linking C executable test_differentiable
+[ 60%] Built target test_differentiable
+[ 61%] Building C object CMakeFiles/test_bell_variants.dir/tests/unit/test_bell_variants.c.o
+[ 61%] Linking C executable test_bell_variants
+[ 61%] Built target test_bell_variants
+[ 61%] Building C object CMakeFiles/test_zne.dir/tests/unit/test_zne.c.o
+[ 62%] Linking C executable test_zne
+[ 62%] Built target test_zne
+[ 62%] Building C object CMakeFiles/test_povm.dir/tests/unit/test_povm.c.o
+[ 62%] Linking C executable test_povm
+[ 62%] Built target test_povm
+[ 63%] Building C object CMakeFiles/test_mutual_info.dir/tests/unit/test_mutual_info.c.o
+[ 63%] Linking C executable test_mutual_info
+[ 63%] Built target test_mutual_info
+[ 63%] Building C object CMakeFiles/test_qrng_di.dir/tests/unit/test_qrng_di.c.o
+[ 63%] Linking C executable test_qrng_di
+[ 63%] Built target test_qrng_di
+[ 63%] Building C object CMakeFiles/test_composite_noise.dir/tests/unit/test_composite_noise.c.o
+[ 63%] Linking C executable test_composite_noise
+[ 63%] Built target test_composite_noise
+[ 63%] Building C object CMakeFiles/test_sha3.dir/tests/unit/test_sha3.c.o
+[ 64%] Linking C executable test_sha3
+[ 64%] Built target test_sha3
+[ 64%] Building C object CMakeFiles/test_mlkem_poly.dir/tests/unit/test_mlkem_poly.c.o
+[ 64%] Linking C executable test_mlkem_poly
+[ 64%] Built target test_mlkem_poly
+[ 64%] Building C object CMakeFiles/test_mlkem.dir/tests/unit/test_mlkem.c.o
+[ 64%] Linking C executable test_mlkem
+[ 64%] Built target test_mlkem
+[ 64%] Building C object CMakeFiles/test_aes_drbg.dir/tests/unit/test_aes_drbg.c.o
+[ 64%] Linking C executable test_aes_drbg
+[ 64%] Built target test_aes_drbg
+[ 65%] Building C object CMakeFiles/test_mlkem_nist_kat.dir/tests/unit/test_mlkem_nist_kat.c.o
+[ 65%] Linking C executable test_mlkem_nist_kat
+[ 65%] Built target test_mlkem_nist_kat
+[ 65%] Building C object CMakeFiles/test_mlkem_acvp.dir/tests/unit/test_mlkem_acvp.c.o
+[ 65%] Linking C executable test_mlkem_acvp
+[ 65%] Built target test_mlkem_acvp
+[ 65%] Building C object CMakeFiles/test_manifest.dir/tests/unit/test_manifest.c.o
+[ 65%] Linking C executable test_manifest
+[ 65%] Built target test_manifest
+[ 65%] Building C object CMakeFiles/test_qgt.dir/tests/unit/test_qgt.c.o
+[ 65%] Linking C executable test_qgt
+[ 65%] Built target test_qgt
+[ 65%] Building C object CMakeFiles/test_qgt_exact_curvature.dir/tests/unit/test_qgt_exact_curvature.c.o
+[ 65%] Linking C executable test_qgt_exact_curvature
+[ 65%] Built target test_qgt_exact_curvature
+[ 65%] Building C object CMakeFiles/test_shor_ecdlp.dir/tests/unit/test_shor_ecdlp.c.o
+[ 65%] Linking C executable test_shor_ecdlp
+[ 65%] Built target test_shor_ecdlp
+[ 65%] Building CXX object CMakeFiles/test_gpu_eshkol.dir/tests/unit/test_gpu_eshkol.cpp.o
+[ 66%] Linking CXX executable test_gpu_eshkol
+[ 66%] Built target test_gpu_eshkol
+[ 67%] Building C object CMakeFiles/test_chemistry.dir/tests/unit/test_chemistry.c.o
+[ 67%] Linking C executable test_chemistry
+[ 67%] Built target test_chemistry
+[ 67%] Building C object CMakeFiles/test_topological.dir/tests/unit/test_topological.c.o
+[ 67%] Linking C executable test_topological
+[ 67%] Built target test_topological
+[ 67%] Building C object CMakeFiles/test_mbl.dir/tests/unit/test_mbl.c.o
+[ 67%] Linking C executable test_mbl
+[ 67%] Built target test_mbl
+[ 67%] Building C object CMakeFiles/test_simd_parity.dir/tests/unit/test_simd_parity.c.o
+[ 68%] Linking C executable test_simd_parity
+[ 68%] Built target test_simd_parity
+[ 68%] Building C object CMakeFiles/test_metal_parity.dir/tests/unit/test_metal_parity.c.o
+[ 69%] Linking C executable test_metal_parity
+[ 69%] Built target test_metal_parity
+[ 69%] Building C object CMakeFiles/test_gpu_sync_contract.dir/tests/unit/test_gpu_sync_contract.c.o
+[ 69%] Linking C executable test_gpu_sync_contract
+[ 69%] Built target test_gpu_sync_contract
+[ 69%] Building C object CMakeFiles/test_measurement_edge.dir/tests/unit/test_measurement_edge.c.o
+[ 70%] Linking C executable test_measurement_edge
+[ 70%] Built target test_measurement_edge
+[ 70%] Building C object CMakeFiles/test_povm_cache.dir/tests/unit/test_povm_cache.c.o
+[ 71%] Linking C executable test_povm_cache
+[ 71%] Built target test_povm_cache
+[ 71%] Building C object CMakeFiles/test_metal_mps_parity.dir/tests/unit/test_metal_mps_parity.c.o
+[ 71%] Linking C executable test_metal_mps_parity
+[ 71%] Built target test_metal_mps_parity
+[ 72%] Building C object CMakeFiles/test_lattice_2d.dir/tests/unit/test_lattice_2d.c.o
+[ 72%] Linking C executable test_lattice_2d
+[ 72%] Built target test_lattice_2d
+[ 73%] Building C object CMakeFiles/test_kagome_ed.dir/tests/unit/test_kagome_ed.c.o
+[ 73%] Linking C executable test_kagome_ed
+[ 73%] Built target test_kagome_ed
+[ 73%] Building C object CMakeFiles/test_kagome_ed_large.dir/tests/unit/test_kagome_ed_large.c.o
+[ 73%] Linking C executable test_kagome_ed_large
+[ 73%] Built target test_kagome_ed_large
+[ 73%] Building C object CMakeFiles/test_libirrep_sector_ed.dir/tests/unit/test_libirrep_sector_ed.c.o
+[ 74%] Linking C executable test_libirrep_sector_ed
+[ 74%] Built target test_libirrep_sector_ed
+[ 74%] Building C object CMakeFiles/test_libirrep_css.dir/tests/unit/test_libirrep_css.c.o
+[ 74%] Linking C executable test_libirrep_css
+[ 74%] Built target test_libirrep_css
+[ 74%] Building C object CMakeFiles/test_qgtl_backend.dir/tests/unit/test_qgtl_backend.c.o
+[ 74%] Linking C executable test_qgtl_backend
+[ 74%] Built target test_qgtl_backend
+[ 74%] Building C object CMakeFiles/test_qgtl_circuit_io.dir/tests/unit/test_qgtl_circuit_io.c.o
+[ 74%] Linking C executable test_qgtl_circuit_io
+[ 74%] Built target test_qgtl_circuit_io
+[ 74%] Building C object CMakeFiles/test_control_plane.dir/tests/integration/test_control_plane.c.o
+[ 75%] Linking C executable test_control_plane
+[ 75%] Built target test_control_plane
+[ 75%] Building C object CMakeFiles/test_control_plane_concurrent.dir/tests/integration/test_control_plane_concurrent.c.o
+[ 75%] Linking C executable test_control_plane_concurrent
+[ 75%] Built target test_control_plane_concurrent
+[ 75%] Building C object CMakeFiles/test_control_plane_shots.dir/tests/integration/test_control_plane_shots.c.o
+[ 75%] Linking C executable test_control_plane_shots
+[ 75%] Built target test_control_plane_shots
+[ 75%] Building C object CMakeFiles/test_control_plane_shutdown.dir/tests/integration/test_control_plane_shutdown.c.o
+[ 75%] Linking C executable test_control_plane_shutdown
+[ 75%] Built target test_control_plane_shutdown
+[ 75%] Building C object CMakeFiles/test_control_plane_auth.dir/tests/integration/test_control_plane_auth.c.o
+[ 75%] Linking C executable test_control_plane_auth
+[ 75%] Built target test_control_plane_auth
+[ 76%] Building C object CMakeFiles/test_control_plane_tenant.dir/tests/integration/test_control_plane_tenant.c.o
+[ 76%] Linking C executable test_control_plane_tenant
+[ 76%] Built target test_control_plane_tenant
+[ 77%] Building C object CMakeFiles/test_control_plane_tls.dir/tests/integration/test_control_plane_tls.c.o
+[ 77%] Linking C executable test_control_plane_tls
+[ 77%] Built target test_control_plane_tls
+[ 77%] Building C object CMakeFiles/test_control_plane_mtls.dir/tests/integration/test_control_plane_mtls.c.o
+[ 78%] Linking C executable test_control_plane_mtls
+[ 78%] Built target test_control_plane_mtls
+[ 78%] Building C object CMakeFiles/test_control_plane_health_rate.dir/tests/integration/test_control_plane_health_rate.c.o
+[ 78%] Linking C executable test_control_plane_health_rate
+[ 78%] Built target test_control_plane_health_rate
+[ 78%] Building C object CMakeFiles/test_control_plane_metrics.dir/tests/integration/test_control_plane_metrics.c.o
+[ 78%] Linking C executable test_control_plane_metrics
+[ 78%] Built target test_control_plane_metrics
+[ 78%] Building C object CMakeFiles/test_control_plane_timeout.dir/tests/integration/test_control_plane_timeout.c.o
+[ 78%] Linking C executable test_control_plane_timeout
+[ 78%] Built target test_control_plane_timeout
+[ 79%] Building C object CMakeFiles/test_control_plane_ipv6.dir/tests/integration/test_control_plane_ipv6.c.o
+[ 79%] Linking C executable test_control_plane_ipv6
+[ 79%] Built target test_control_plane_ipv6
+[ 80%] Building C object CMakeFiles/test_control_plane_hardening.dir/tests/integration/test_control_plane_hardening.c.o
+[ 80%] Linking C executable test_control_plane_hardening
+[ 80%] Built target test_control_plane_hardening
+[ 80%] Building C object CMakeFiles/test_decoder_bench.dir/tests/unit/test_decoder_bench.c.o
+[ 81%] Linking C executable test_decoder_bench
+[ 81%] Built target test_decoder_bench
+[ 81%] Building C object CMakeFiles/test_scheduler.dir/tests/unit/test_scheduler.c.o
+[ 81%] Linking C executable test_scheduler
+[ 81%] Built target test_scheduler
+[ 81%] Building C object CMakeFiles/test_vendor_noise_backend.dir/tests/unit/test_vendor_noise_backend.c.o
+[ 81%] Linking C executable test_vendor_noise_backend
+[ 81%] Built target test_vendor_noise_backend
+[ 82%] Building C object CMakeFiles/test_gpu_backend_correctness.dir/tests/integration/test_gpu_backend_correctness.c.o
+[ 82%] Linking C executable test_gpu_backend_correctness
+[ 82%] Built target test_gpu_backend_correctness
+[ 82%] Building C object CMakeFiles/test_platform_integration.dir/tests/integration/test_platform_integration.c.o
+[ 83%] Linking C executable test_platform_integration
+[ 83%] Built target test_platform_integration
+[ 83%] Building C object CMakeFiles/test_skyrmion.dir/tests/unit/test_skyrmion.c.o
+[ 83%] Linking C executable test_skyrmion
+[ 83%] Built target test_skyrmion
+[ 83%] Building C object CMakeFiles/test_feynman.dir/tests/unit/test_feynman.c.o
+[ 83%] Linking C executable test_feynman
+[ 83%] Built target test_feynman
+[ 83%] Building C object CMakeFiles/test_circuit_diagram.dir/tests/unit/test_circuit_diagram.c.o
+[ 84%] Linking C executable test_circuit_diagram
+[ 84%] Built target test_circuit_diagram
+[ 84%] Building C object CMakeFiles/test_entropy_pool.dir/tests/unit/test_entropy_pool.c.o
+[ 84%] Linking C executable test_entropy_pool
+[ 84%] Built target test_entropy_pool
+[ 84%] Building C object CMakeFiles/test_entropy_sources.dir/tests/unit/test_entropy_sources.c.o
+[ 85%] Linking C executable test_entropy_sources
+[ 85%] Built target test_entropy_sources
+[ 86%] Building C object CMakeFiles/test_entropy_jitter.dir/tests/unit/test_entropy_jitter.c.o
+[ 86%] Linking C executable test_entropy_jitter
+[ 86%] Built target test_entropy_jitter
+[ 86%] Building C object CMakeFiles/test_hardware_entropy_probe.dir/tests/unit/test_hardware_entropy_probe.c.o
+[ 86%] Building C object CMakeFiles/test_hardware_entropy_probe.dir/src/applications/hardware_entropy.c.o
+[ 87%] Linking C executable test_hardware_entropy_probe
+[ 87%] Built target test_hardware_entropy_probe
+[ 87%] Building C object CMakeFiles/test_qrng_statistics.dir/tests/unit/test_qrng_statistics.c.o
+[ 88%] Linking C executable test_qrng_statistics
+[ 88%] Built target test_qrng_statistics
+[ 88%] Building C object CMakeFiles/test_qrng_thread_safety.dir/tests/unit/test_qrng_thread_safety.c.o
+[ 88%] Linking C executable test_qrng_thread_safety
+[ 88%] Built target test_qrng_thread_safety
+[ 88%] Building C object CMakeFiles/test_qrng_delivery.dir/tests/unit/test_qrng_delivery.c.o
+[ 89%] Linking C executable test_qrng_delivery
+[ 89%] Built target test_qrng_delivery
+[ 89%] Building C object CMakeFiles/test_qrng_bell_certified_output.dir/tests/unit/test_qrng_bell_certified_output.c.o
+[ 89%] Linking C executable test_qrng_bell_certified_output
+[ 89%] Built target test_qrng_bell_certified_output
+[ 90%] Building C object CMakeFiles/test_moonlab_export_abi.dir/tests/abi/test_moonlab_export_abi.c.o
+[ 90%] Linking C executable test_moonlab_export_abi
+[ 90%] Built target test_moonlab_export_abi
+[ 90%] Building C object CMakeFiles/test_backend_differential.dir/tests/oracle/test_backend_differential.c.o
+[ 90%] Linking C executable test_backend_differential
+[ 90%] Built target test_backend_differential
+[ 90%] Building C object CMakeFiles/test_gradient_oracle.dir/tests/oracle/test_gradient_oracle.c.o
+[ 91%] Linking C executable test_gradient_oracle
+[ 91%] Built target test_gradient_oracle
+[ 91%] Building C object CMakeFiles/test_measurement_oracle.dir/tests/oracle/test_measurement_oracle.c.o
+[ 91%] Linking C executable test_measurement_oracle
+[ 91%] Built target test_measurement_oracle
+[ 92%] Building C object CMakeFiles/test_edge_matrix.dir/tests/oracle/test_edge_matrix.c.o
+[ 92%] Linking C executable test_edge_matrix
+[ 92%] Built target test_edge_matrix
+[ 92%] Building C object CMakeFiles/test_property_invariants.dir/tests/oracle/test_property_invariants.c.o
+[ 92%] Linking C executable test_property_invariants
+[ 92%] Built target test_property_invariants
+[ 92%] Building C object CMakeFiles/test_analyticity_oracle.dir/tests/oracle/test_analyticity_oracle.c.o
+[ 92%] Linking C executable test_analyticity_oracle
+[ 92%] Built target test_analyticity_oracle
+[ 92%] Building C object CMakeFiles/test_wick_rotation_oracle.dir/tests/oracle/test_wick_rotation_oracle.c.o
+[ 93%] Linking C executable test_wick_rotation_oracle
+[ 93%] Built target test_wick_rotation_oracle
+[ 93%] Building C object CMakeFiles/test_quantum_annealing.dir/tests/unit/test_quantum_annealing.c.o
+[ 93%] Linking C executable test_quantum_annealing
+[ 93%] Built target test_quantum_annealing
+[ 93%] Building C object CMakeFiles/seeded_shots_replay_probe.dir/tools/seeded_shots_replay_probe.c.o
+[ 93%] Linking C executable seeded_shots_replay_probe
+[ 93%] Built target seeded_shots_replay_probe
+[ 93%] Building C object tests/statistical/CMakeFiles/stat_qrng_battery.dir/test_qrng_battery.c.o
+[ 93%] Linking C executable stat_qrng_battery
+[ 93%] Built target stat_qrng_battery
+[ 93%] Building C object tests/statistical/CMakeFiles/stat_mlkem_adversarial.dir/test_mlkem_adversarial.c.o
+[ 93%] Linking C executable stat_mlkem_adversarial
+[ 93%] Built target stat_mlkem_adversarial
+[ 93%] Building C object tests/statistical/CMakeFiles/stat_mlkem_timing.dir/test_mlkem_timing.c.o
+[ 94%] Linking C executable stat_mlkem_timing
+[ 94%] Built target stat_mlkem_timing
+[ 95%] Building C object tests/statistical/CMakeFiles/stat_entropy_health_adversarial.dir/test_entropy_health_adversarial.c.o
+[ 95%] Linking C executable stat_entropy_health_adversarial
+[ 95%] Built target stat_entropy_health_adversarial
+[ 96%] Building C object tests/differential/CMakeFiles/diff_backends.dir/diff_backends.c.o
+[ 96%] Linking C executable diff_backends
+[ 96%] Built target diff_backends
+[ 97%] Building C object tests/numerical/CMakeFiles/t_rotations.dir/t_rotations.c.o
+[ 97%] Linking C executable t_rotations
+[ 97%] Built target t_rotations
+[ 97%] Building C object tests/numerical/CMakeFiles/t_qft.dir/t_qft.c.o
+[ 97%] Linking C executable t_qft
+[ 97%] Built target t_qft
+[ 98%] Building C object tests/numerical/CMakeFiles/t_measure.dir/t_measure.c.o
+[ 98%] Linking C executable t_measure
+[ 98%] Built target t_measure
+[ 98%] Building C object tests/numerical/CMakeFiles/t_dmrg.dir/t_dmrg.c.o
+[ 99%] Linking C executable t_dmrg
+[ 99%] Built target t_dmrg
+[ 99%] Building C object tests/numerical/CMakeFiles/t_eigen_lapack.dir/t_eigen.c.o
+[ 99%] Linking C executable t_eigen_lapack
+[ 99%] Built target t_eigen_lapack
+[ 99%] Building C object tests/numerical/CMakeFiles/t_svd_lapack.dir/t_svd.c.o
+[100%] Linking C executable t_svd_lapack
+[100%] Built target t_svd_lapack
+[100%] Building C object tests/numerical/CMakeFiles/num_eigen_jacobi_obj.dir/__/__/src/utils/matrix_math.c.o
+[100%] Built target num_eigen_jacobi_obj
+[100%] Building C object tests/numerical/CMakeFiles/t_eigen_jacobi.dir/t_eigen.c.o
+[100%] Linking C executable t_eigen_jacobi
+[100%] Built target t_eigen_jacobi
+[100%] Building C object tests/numerical/CMakeFiles/num_svd_fallback_obj.dir/__/__/src/algorithms/tensor_network/tensor.c.o
+[100%] Building C object tests/numerical/CMakeFiles/num_svd_fallback_obj.dir/gpu_stubs.c.o
+[100%] Built target num_svd_fallback_obj
+[100%] Building C object tests/numerical/CMakeFiles/t_svd_fallback.dir/t_svd.c.o
+[100%] Linking C executable t_svd_fallback
+[100%] Built target t_svd_fallback
+Internal ctest changing into directory: /home/tyr/moonlab-v121-mesh-20260909T022230Z/build-mesh-release-smoke
+Test project /home/tyr/moonlab-v121-mesh-20260909T022230Z/build-mesh-release-smoke
+      Start   4: gate_test
+ 1/32 Test   #4: gate_test .............................   Passed    0.03 sec
+      Start   5: correlation_test
+ 2/32 Test   #5: correlation_test ......................   Passed    0.01 sec
+      Start   6: unit_quantum_state
+ 3/32 Test   #6: unit_quantum_state ....................   Passed    0.02 sec
+      Start   7: unit_constants
+ 4/32 Test   #7: unit_constants ........................   Passed    0.00 sec
+      Start  10: unit_correctness_properties
+ 5/32 Test  #10: unit_correctness_properties ...........   Passed    0.01 sec
+      Start  11: unit_quantum_gates
+ 6/32 Test  #11: unit_quantum_gates ....................   Passed    0.01 sec
+      Start  12: unit_memory_align
+ 7/32 Test  #12: unit_memory_align .....................   Passed    0.42 sec
+      Start  13: unit_simd_dispatch
+ 8/32 Test  #13: unit_simd_dispatch ....................   Passed    0.00 sec
+      Start  16: comprehensive
+ 9/32 Test  #16: comprehensive .........................   Passed    0.07 sec
+      Start  20: fast_measurement
+10/32 Test  #20: fast_measurement ......................   Passed    0.11 sec
+      Start  21: unit_measurement
+11/32 Test  #21: unit_measurement ......................   Passed    0.01 sec
+      Start  22: unit_entanglement
+12/32 Test  #22: unit_entanglement .....................   Passed    0.01 sec
+      Start  23: unit_noise
+13/32 Test  #23: unit_noise ............................   Passed    0.04 sec
+      Start  42: unit_svd_compress
+14/32 Test  #42: unit_svd_compress .....................   Passed    0.01 sec
+      Start  45: unit_hermitian_eigen
+15/32 Test  #45: unit_hermitian_eigen ..................   Passed    0.01 sec
+      Start  76: unit_moonlab_status
+16/32 Test  #76: unit_moonlab_status ...................   Passed    0.01 sec
+      Start  82: unit_fusion
+17/32 Test  #82: unit_fusion ...........................   Passed    0.01 sec
+      Start  86: unit_matrix_math
+18/32 Test  #86: unit_matrix_math ......................   Passed    0.00 sec
+      Start  89: gpu_backend_discovery
+19/32 Test  #89: gpu_backend_discovery .................   Passed    0.28 sec
+      Start  93: unit_zne
+20/32 Test  #93: unit_zne ..............................   Passed    0.01 sec
+      Start  94: unit_povm
+21/32 Test  #94: unit_povm .............................   Passed    0.01 sec
+      Start  95: unit_mutual_info
+22/32 Test  #95: unit_mutual_info ......................   Passed    0.01 sec
+      Start  97: unit_composite_noise
+23/32 Test  #97: unit_composite_noise ..................   Passed    0.01 sec
+      Start 109: unit_gpu_eshkol
+24/32 Test #109: unit_gpu_eshkol .......................   Passed    0.02 sec
+      Start 113: unit_simd_parity
+25/32 Test #113: unit_simd_parity ......................   Passed    0.01 sec
+      Start 114: unit_metal_parity
+26/32 Test #114: unit_metal_parity .....................   Passed    0.00 sec
+      Start 115: gpu_sync_contract
+27/32 Test #115: gpu_sync_contract .....................   Passed    0.22 sec
+      Start 116: unit_measurement_edge
+28/32 Test #116: unit_measurement_edge .................   Passed    0.01 sec
+      Start 117: unit_povm_cache
+29/32 Test #117: unit_povm_cache .......................   Passed    0.01 sec
+      Start 118: gpu_metal_mps_parity
+30/32 Test #118: gpu_metal_mps_parity ..................   Passed    0.00 sec
+      Start 142: integration_gpu_backend_correctness
+31/32 Test #142: integration_gpu_backend_correctness ...   Passed    0.23 sec
+      Start 157: abi_moonlab_export
+32/32 Test #157: abi_moonlab_export ....................   Passed    3.01 sec
+
+100% tests passed, 0 tests failed out of 32
+
+Label Time Summary:
+abi     =   3.02 sec*proc (2 tests)
+core    =   1.03 sec*proc (26 tests)
+gpu     =   0.74 sec*proc (6 tests)
+
+Total Test time (real) =   4.60 sec

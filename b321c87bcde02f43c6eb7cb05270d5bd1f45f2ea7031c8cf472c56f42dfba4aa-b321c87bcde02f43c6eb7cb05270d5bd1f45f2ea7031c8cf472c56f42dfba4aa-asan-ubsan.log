@@ -1,0 +1,145 @@
+Test project /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build-asan-smoke
+      Start  26: unit_vqe
+      Start  55: unit_tdvp_bulk_site
+ 1/66 Test  #55: unit_tdvp_bulk_site ..............   Passed    5.99 sec
+      Start  40: unit_ca_mps_sample
+ 2/66 Test  #26: unit_vqe .........................   Passed    6.85 sec
+      Start  18: mps_vs_exact
+ 3/66 Test  #40: unit_ca_mps_sample ...............   Passed    2.62 sec
+      Start  75: unit_tn_mps_deep_forward
+ 4/66 Test  #18: mps_vs_exact .....................   Passed    2.29 sec
+      Start  29: unit_qaoa_gradient
+ 5/66 Test  #75: unit_tn_mps_deep_forward .........   Passed    1.78 sec
+      Start  58: unit_ca_mps_imag_time
+ 6/66 Test  #58: unit_ca_mps_imag_time ............   Passed    0.75 sec
+      Start  28: unit_qaoa
+ 7/66 Test  #29: unit_qaoa_gradient ...............   Passed    2.04 sec
+      Start  17: dmrg
+ 8/66 Test  #17: dmrg .............................   Passed    0.46 sec
+      Start  60: unit_ca_mps_var_d_large
+ 9/66 Test  #28: unit_qaoa ........................   Passed    0.50 sec
+      Start 113: unit_metal_parity
+10/66 Test #113: unit_metal_parity ................   Passed    0.27 sec
+      Start  23: unit_noise
+11/66 Test  #60: unit_ca_mps_var_d_large ..........   Passed    0.40 sec
+      Start  27: unit_vqe_gradient_contract
+12/66 Test  #23: unit_noise .......................   Passed    0.32 sec
+      Start  62: unit_ca_mps_var_d_composite
+13/66 Test  #27: unit_vqe_gradient_contract .......   Passed    0.29 sec
+      Start   4: gate_test
+14/66 Test  #62: unit_ca_mps_var_d_composite ......   Passed    0.18 sec
+      Start   5: correlation_test
+15/66 Test   #4: gate_test ........................   Passed    0.18 sec
+      Start  56: unit_ca_mps_bond_advantage
+16/66 Test   #5: correlation_test .................   Passed    0.20 sec
+      Start  96: unit_composite_noise
+17/66 Test  #96: unit_composite_noise .............   Passed    0.25 sec
+      Start  61: unit_ca_mps_var_d_alt
+18/66 Test  #56: unit_ca_mps_bond_advantage .......   Passed    0.37 sec
+      Start  43: unit_svd_noncanonical_axis
+19/66 Test  #61: unit_ca_mps_var_d_alt ............   Passed    0.22 sec
+      Start  33: unit_ca_peps
+20/66 Test  #43: unit_svd_noncanonical_axis .......   Passed    0.28 sec
+      Start  20: fast_measurement
+21/66 Test  #33: unit_ca_peps .....................   Passed    0.17 sec
+      Start 167: unit_quantum_annealing
+22/66 Test  #20: fast_measurement .................   Passed    0.25 sec
+      Start  16: comprehensive
+23/66 Test #167: unit_quantum_annealing ...........   Passed    0.25 sec
+      Start  38: unit_ca_mps_vs_sv
+24/66 Test  #16: comprehensive ....................   Passed    0.18 sec
+      Start 112: unit_simd_parity
+25/66 Test  #38: unit_ca_mps_vs_sv ................   Passed    0.21 sec
+      Start  93: unit_povm
+26/66 Test #112: unit_simd_parity .................   Passed    0.22 sec
+      Start  11: unit_quantum_gates
+27/66 Test  #93: unit_povm ........................   Passed    0.19 sec
+      Start 114: gpu_sync_contract
+28/66 Test  #11: unit_quantum_gates ...............   Passed    0.22 sec
+      Start  10: unit_correctness_properties
+29/66 Test #114: gpu_sync_contract ................   Passed    0.22 sec
+      Start 111: unit_mbl
+30/66 Test  #10: unit_correctness_properties ......   Passed    0.21 sec
+      Start  94: unit_mutual_info
+31/66 Test #111: unit_mbl .........................   Passed    0.22 sec
+      Start  22: unit_entanglement
+32/66 Test  #94: unit_mutual_info .................   Passed    0.22 sec
+      Start   6: unit_quantum_state
+33/66 Test  #22: unit_entanglement ................   Passed    0.21 sec
+      Start  15: unit_tensor_network
+34/66 Test   #6: unit_quantum_state ...............   Passed    0.24 sec
+      Start 107: unit_shor_ecdlp
+35/66 Test  #15: unit_tensor_network ..............   Passed    0.23 sec
+      Start 109: unit_chemistry
+36/66 Test #107: unit_shor_ecdlp ..................   Passed    0.21 sec
+      Start 115: unit_measurement_edge
+37/66 Test #109: unit_chemistry ...................   Passed    0.22 sec
+      Start  54: unit_tdvp_validation
+38/66 Test #115: unit_measurement_edge ............   Passed    0.21 sec
+      Start 116: unit_povm_cache
+39/66 Test  #54: unit_tdvp_validation .............   Passed    0.22 sec
+      Start  57: unit_ca_mps_heisenberg
+40/66 Test #116: unit_povm_cache ..................   Passed    0.22 sec
+      Start  92: unit_zne
+41/66 Test  #57: unit_ca_mps_heisenberg ...........   Passed    0.21 sec
+      Start  83: unit_quantum_volume
+42/66 Test  #92: unit_zne .........................   Passed    0.21 sec
+      Start  74: unit_tn_mps_interior_gate
+43/66 Test  #83: unit_quantum_volume ..............   Passed    0.22 sec
+      Start  39: unit_ca_mps_prob
+44/66 Test  #74: unit_tn_mps_interior_gate ........   Passed    0.22 sec
+      Start  78: unit_mbl_smoke
+45/66 Test  #39: unit_ca_mps_prob .................   Passed    0.22 sec
+      Start  59: unit_ca_mps_var_d
+46/66 Test  #78: unit_mbl_smoke ...................   Passed    0.23 sec
+      Start  90: differentiable
+47/66 Test  #59: unit_ca_mps_var_d ................   Passed    0.21 sec
+      Start  82: unit_fusion
+48/66 Test  #90: differentiable ...................   Passed    0.22 sec
+      Start  44: unit_tn_gate_order
+49/66 Test  #82: unit_fusion ......................   Passed    0.23 sec
+      Start  77: unit_tn_dead_code_smoke
+50/66 Test  #44: unit_tn_gate_order ...............   Passed    0.23 sec
+      Start  42: unit_svd_compress
+51/66 Test  #77: unit_tn_dead_code_smoke ..........   Passed    0.22 sec
+      Start  86: unit_matrix_math
+52/66 Test  #42: unit_svd_compress ................   Passed    0.23 sec
+      Start  45: unit_hermitian_eigen
+53/66 Test  #86: unit_matrix_math .................   Passed    0.23 sec
+      Start 118: unit_lattice_2d
+54/66 Test  #45: unit_hermitian_eigen .............   Passed    0.23 sec
+      Start  25: unit_grover
+55/66 Test #118: unit_lattice_2d ..................   Passed    0.23 sec
+      Start  32: unit_ca_mps_limits
+56/66 Test  #25: unit_grover ......................   Passed    0.22 sec
+      Start  89: tensor_adversarial
+57/66 Test  #32: unit_ca_mps_limits ...............   Passed    0.21 sec
+      Start  30: unit_qpe
+58/66 Test  #89: tensor_adversarial ...............   Passed    0.21 sec
+      Start  73: unit_tn_mps_from_statevector
+59/66 Test  #30: unit_qpe .........................   Passed    0.22 sec
+      Start  64: unit_gauge_warmstart
+60/66 Test  #73: unit_tn_mps_from_statevector .....   Passed    0.22 sec
+      Start  21: unit_measurement
+61/66 Test  #64: unit_gauge_warmstart .............   Passed    0.22 sec
+      Start  63: unit_z2_lgt_pauli_sum
+62/66 Test  #21: unit_measurement .................   Passed    0.21 sec
+      Start  12: unit_memory_align
+63/66 Test  #12: unit_memory_align ................   Passed    0.06 sec
+      Start   7: unit_constants
+64/66 Test   #7: unit_constants ...................   Passed    0.04 sec
+      Start  13: unit_simd_dispatch
+65/66 Test  #63: unit_z2_lgt_pauli_sum ............   Passed    0.21 sec
+66/66 Test  #13: unit_simd_dispatch ...............   Passed    0.05 sec
+
+100% tests passed out of 66
+
+Label Time Summary:
+algorithms           =  11.68 sec*proc (13 tests)
+ca_mps               =   6.22 sec*proc (14 tests)
+core                 =   5.30 sec*proc (26 tests)
+gpu                  =   0.49 sec*proc (2 tests)
+quantum_annealing    =   0.25 sec*proc (1 test)
+tn                   =  12.58 sec*proc (13 tests)
+
+Total Test time (real) =  17.92 sec

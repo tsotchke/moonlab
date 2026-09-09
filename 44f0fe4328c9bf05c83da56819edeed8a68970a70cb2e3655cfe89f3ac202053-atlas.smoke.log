@@ -1,0 +1,1133 @@
+target=atlas
+Darwin 24.1.0 arm64
+cmake version 4.4.3
+ctest version 4.4.3
+-- The C compiler identification is AppleClang 16.0.0.16000026
+-- The CXX compiler identification is AppleClang 16.0.0.16000026
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Platform: macOS (ARM64)
+-- Performing Test HAVE_WNO_ERROR_discarded_qualifiers
+-- Performing Test HAVE_WNO_ERROR_discarded_qualifiers - Failed
+-- Performing Test HAVE_WNO_ERROR_switch_unreachable
+-- Performing Test HAVE_WNO_ERROR_switch_unreachable - Failed
+-- Performing Test HAVE_WNO_ERROR_ignored_qualifiers
+-- Performing Test HAVE_WNO_ERROR_ignored_qualifiers - Success
+-- Performing Test HAVE_WNO_ERROR_unused_but_set_variable
+-- Performing Test HAVE_WNO_ERROR_unused_but_set_variable - Success
+-- Performing Test HAVE_WNO_ERROR_format_truncation
+-- Performing Test HAVE_WNO_ERROR_format_truncation - Failed
+-- Performing Test HAVE_WNO_ERROR_unknown_pragmas
+-- Performing Test HAVE_WNO_ERROR_unknown_pragmas - Success
+-- Performing Test HAVE_WNO_ERROR_nan_infinity_disabled
+-- Performing Test HAVE_WNO_ERROR_nan_infinity_disabled - Failed
+-- Performing Test HAVE_WNO_ERROR_strict_aliasing
+-- Performing Test HAVE_WNO_ERROR_strict_aliasing - Success
+-- Performing Test HAVE_WNO_ERROR_unused_result
+-- Performing Test HAVE_WNO_ERROR_unused_result - Success
+-- Performing Test HAVE_WNO_ERROR_overlength_strings
+-- Performing Test HAVE_WNO_ERROR_overlength_strings - Success
+-- Performing Test HAVE_WNO_ERROR_missing_braces
+-- Performing Test HAVE_WNO_ERROR_missing_braces - Success
+-- Performing Test HAVE_WNO_ERROR_implicit_fallthrough
+-- Performing Test HAVE_WNO_ERROR_implicit_fallthrough - Success
+-- Performing Test HAVE_WNO_ERROR_address
+-- Performing Test HAVE_WNO_ERROR_address - Success
+-- Performing Test HAVE_WNO_ERROR_stringop_truncation
+-- Performing Test HAVE_WNO_ERROR_stringop_truncation - Failed
+-- NEON: Available (ARM64 baseline)
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- OpenMP: Found via Homebrew at /opt/homebrew/opt/libomp
+-- Accelerate: Found
+-- Metal: Found
+-- Security: Found
+-- Found OpenSSL: /opt/homebrew/opt/openssl@3/lib/libcrypto.dylib (found version "3.6.3")
+-- OpenSSL: 3.6.3 at /opt/homebrew/opt/openssl@3/include
+-- LTO: Enabled
+-- Tests: Enabled
+-- tests/statistical: 4 adversarial targets registered (labels: statistical, crypto)
+-- differential: linking in-tree quantumsim target
+-- numerical: linking in-tree quantumsim target
+-- 
+-- ========================================
+-- Quantum Simulator Configuration Summary
+-- ========================================
+-- Version:      1.2.1
+-- Platform:     macOS
+-- Architecture: ARM64
+-- Build Type:   Release
+-- 
+-- SIMD Features:
+--   AVX-512:    
+--   AVX2:       
+--   NEON:       ON
+--   SVE:        
+-- 
+-- Optional Features:
+--   OpenMP:     ON
+--   Accelerate: ON
+--   Metal:      ON
+--   OpenCL:     
+--   Vulkan:     
+--   CUDA:       
+--   cuQuantum:  
+--   MPI:        
+-- ========================================
+-- 
+-- Configuring done (5.8s)
+-- Generating done (0.8s)
+-- Build files have been written to: /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/build-mesh-release-smoke
+[  0%] Building C object CMakeFiles/hw_rng_probe.dir/tools/hw_rng_probe.c.o
+[  0%] Linking C executable hw_rng_probe
+[  0%] Built target hw_rng_probe
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/state.c.o
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/gates.c.o
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/measurement.c.o
+[  0%] Building C object CMakeFiles/quantumsim.dir/src/quantum/entanglement.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/quantum/noise.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/quantum/noise_mpdo.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/backends/clifford/clifford.c.o
+[  1%] Building C object CMakeFiles/quantumsim.dir/src/backends/clifford/pauli_frame.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/backends/clifford/pauli_frame.c:15:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/qec/uf_decoder.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/qec/uf_decoder.c:18:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/qec/stim_circuit.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/qec/stim_dem.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/grover.c.o
+[  2%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/grover_optimizer.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/grover_optimizer.c:30:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/quantum_rng.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/bell_tests.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/qaoa.c.o
+[  3%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/quantum_annealing.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/qpe.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/vqe.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/h2_sto3g.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/vqe_qng.c.o
+[  4%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tensor.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:817:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+  817 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:855:5: warning: 'cblas_zgemv' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+  855 |     cblas_zgemv(CblasRowMajor, CblasNoTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:402:6: note: 'cblas_zgemv' has been explicitly marked deprecated here
+  402 | void cblas_zgemv(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:1045:5: warning: 'zgesvd_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1045 |     zgesvd_("A", "A", &M, &N, (__CLPK_doublecomplex *)a_copy, &lda, s,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8254:5: note: 'zgesvd_' has been explicitly marked deprecated here
+ 8254 | int zgesvd_(char *__jobu, char *__jobvt, __CLPK_integer *__m,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:1064:5: warning: 'zgesvd_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1064 |     zgesvd_("A", "A", &M, &N, (__CLPK_doublecomplex *)a_copy, &lda, s,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8254:5: note: 'zgesvd_' has been explicitly marked deprecated here
+ 8254 | int zgesvd_(char *__jobu, char *__jobvt, __CLPK_integer *__m,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:1763:5: warning: 'zgeqrf_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1763 |     zgeqrf_(&M, &N, (__CLPK_doublecomplex *)a_data, &M,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8203:5: note: 'zgeqrf_' has been explicitly marked deprecated here
+ 8203 | int zgeqrf_(__CLPK_integer *__m, __CLPK_integer *__n, __CLPK_doublecomplex *__a,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:1769:5: warning: 'zgeqrf_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1769 |     zgeqrf_(&M, &N, (__CLPK_doublecomplex *)a_data, &M,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8203:5: note: 'zgeqrf_' has been explicitly marked deprecated here
+ 8203 | int zgeqrf_(__CLPK_integer *__m, __CLPK_integer *__n, __CLPK_doublecomplex *__a,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:1816:5: warning: 'zungqr_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1816 |     zungqr_(&M, &K, &K, (__CLPK_doublecomplex *)a_data, &M,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:10338:5: note: 'zungqr_' has been explicitly marked deprecated here
+ 10338 | int zungqr_(__CLPK_integer *__m, __CLPK_integer *__n, __CLPK_integer *__k,
+       |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tensor.c:1826:5: warning: 'zungqr_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1826 |     zungqr_(&M, &K, &K, (__CLPK_doublecomplex *)a_data, &M,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:10338:5: note: 'zungqr_' has been explicitly marked deprecated here
+ 10338 | int zungqr_(__CLPK_integer *__m, __CLPK_integer *__n, __CLPK_integer *__k,
+       |     ^
+8 warnings generated.
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tn_state.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tn_state.c:1318:13: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1318 |             cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |             ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+1 warning generated.
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tn_gates.c.o
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tn_measurement.c.o
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/contraction.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/contraction.c:23:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[  5%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/svd_compress.c.o
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/dmrg.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:1517:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1517 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:1549:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1549 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:1582:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1582 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasConjTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:1647:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1647 |     cblas_zgemm(CblasRowMajor, CblasConjTrans, CblasNoTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:1716:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1716 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:1750:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 1750 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/dmrg.c:2238:9: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+ 2238 |         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |         ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+7 warnings generated.
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/tdvp.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/tdvp.c:886:9: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+  886 |         cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |         ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+1 warning generated.
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/mpo_2d.c.o
+[  6%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/lattice_2d.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/skyrmion_braiding.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_mps.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_mps_var_d.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/tensor_network/ca_mps_var_d.c:30:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_mps_var_d_stab_warmstart.c.o
+[  7%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/tensor_network/ca_peps.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/chemistry/chemistry.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topological/topological.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topological/braid_compiler.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/chern_marker.c.o
+[  8%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/chern_kpm.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/chern_fhs.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/topology_realspace/mpo_kpm.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/quantum_geometry/qgt.c.o
+[  9%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/shor_ecdlp/shor_ecdlp.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/diff/differentiable.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/mitigation/zne.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/crypto/sha3/sha3.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/crypto/mlkem/poly.c.o
+[ 10%] Building C object CMakeFiles/quantumsim.dir/src/crypto/mlkem/mlkem.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/crypto/aes/aes.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/crypto/drbg/ctr_drbg.c.o
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/algorithms/mbl/mbl.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/mbl/mbl.c:361:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  361 |     zheev_(&jobz, &uplo, &n_clpk, (__CLPK_doublecomplex *)dense, &lda_clpk,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/mbl/mbl.c:384:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  384 |     zheev_(&jobz, &uplo, &n_clpk, (__CLPK_doublecomplex *)dense, &lda_clpk,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/mbl/mbl.c:697:5: warning: 'dsyev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  697 |     dsyev_(&jobz, &uplo, &n, krylov_evecs, &n, krylov_evals, &work_query, &lwork, &info);
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:4811:5: note: 'dsyev_' has been explicitly marked deprecated here
+ 4811 | int dsyev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/mbl/mbl.c:712:5: warning: 'dsyev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  712 |     dsyev_(&jobz, &uplo, &n, krylov_evecs, &n, krylov_evals, work, &lwork, &info);
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:4811:5: note: 'dsyev_' has been explicitly marked deprecated here
+ 4811 | int dsyev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/mbl/mbl.c:1331:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1331 |     zheev_(&jobz, &uplo, &n, (__CLPK_doublecomplex *)rho_A, &n, evals,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/algorithms/mbl/mbl.c:1343:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+ 1343 |     zheev_(&jobz, &uplo, &n, (__CLPK_doublecomplex *)rho_A, &n, evals,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+6 warnings generated.
+[ 11%] Building C object CMakeFiles/quantumsim.dir/src/visualization/circuit_diagram.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/visualization/feynman_diagram.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/memory_align.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/simd_dispatch.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/simd_ops.c.o
+[ 12%] Building C object CMakeFiles/quantumsim.dir/src/optimization/parallel_ops.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/optimization/parallel_ops.c:13:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/accelerate_ops.c.o
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/fusion/fusion.c.o
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/gpu/gpu_backend.c.o
+[ 13%] Building CXX object CMakeFiles/quantumsim.dir/src/optimization/gpu_metal.mm.o
+[ 13%] Building C object CMakeFiles/quantumsim.dir/src/optimization/gpu_metal_svd.c.o
+[ 14%] Building CXX object CMakeFiles/quantumsim.dir/src/optimization/gpu/backends/gpu_eshkol.cpp.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/optimization/gpu/backends/gpu_eshkol.cpp:14:
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/optimization/gpu/backends/gpu_eshkol.h:50:16: warning: '_Complex' is a C99 extension [-Wc99-extensions]
+   50 | typedef double _Complex moonlab_cplx_t;
+      |                ^
+1 warning generated.
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/entropy.c.o
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/config.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/utils/config.c:36:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[ 14%] Building C object CMakeFiles/quantumsim.dir/src/utils/matrix_math.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/utils/matrix_math.c:141:9: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  141 |         zheev_(&jobz, &uplo, &N,
+      |         ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/utils/matrix_math.c:149:9: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  149 |         zheev_(&jobz, &uplo, &N,
+      |         ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+2 warnings generated.
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/manifest.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/quantum_entropy.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/moonlab_status.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/token_bucket.c.o
+[ 15%] Building C object CMakeFiles/quantumsim.dir/src/utils/audit_buffer.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/integration/libirrep_bridge.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/health_tests.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/bell_test.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/entropy_pool.c.o
+[ 16%] Building C object CMakeFiles/quantumsim.dir/src/applications/hardware_entropy.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/qrng.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/qrng_di.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_qrng_export.c.o
+[ 17%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_export_lean.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_tdvp_export.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_vqe_export.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_anneal_export.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/moonlab_qgtl_backend.c.o
+[ 18%] Building C object CMakeFiles/quantumsim.dir/src/applications/decoder_bench.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/mwpm_exact.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/vendor_noise_backend.c.o
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/distributed/scheduler.c.o
+In file included from /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/src/distributed/scheduler.c:33:
+/opt/homebrew/opt/libomp/include/omp.h:60:9: warning: ISO C restricts enumerator values to range of 'int' (2147483648 is too large) [-Wpedantic]
+   60 |         omp_sched_monotonic = 0x80000000
+      |         ^                     ~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:428:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  428 |       KMP_ALLOCATOR_MAX_HANDLE = UINTPTR_MAX
+      |       ^                          ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:445:7: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  445 |       KMP_MEMSPACE_MAX_HANDLE = UINTPTR_MAX
+      |       ^                         ~~~~~~~~~~~
+/opt/homebrew/opt/libomp/include/omp.h:503:39: warning: ISO C restricts enumerator values to range of 'int' (18446744073709551615 is too large) [-Wpedantic]
+  503 |     typedef enum omp_event_handle_t { KMP_EVENT_MAX_HANDLE = UINTPTR_MAX } omp_event_handle_t;
+      |                                       ^                      ~~~~~~~~~~~
+4 warnings generated.
+[ 19%] Building C object CMakeFiles/quantumsim.dir/src/applications/nist_sp800_22.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/applications/quantum_volume.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/applications/hep/lattice_z2_1d.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/control/control_plane.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/tools/profiler/profiler.c.o
+[ 20%] Building C object CMakeFiles/quantumsim.dir/src/utils/performance_monitor.c.o
+[ 21%] Building C object CMakeFiles/quantumsim.dir/src/quantum/gpu_route_cpu_unavailable.c.o
+[ 21%] Linking CXX shared library libquantumsim.dylib
+[ 21%] Built target quantumsim
+[ 21%] Building C object CMakeFiles/moonlab-control-server.dir/tools/moonlab-control-server.c.o
+[ 22%] Linking C executable moonlab-control-server
+[ 22%] Built target moonlab-control-server
+[ 22%] Building C object CMakeFiles/qsim_test.dir/tests/quantum_sim_test.c.o
+[ 23%] Linking C executable qsim_test
+[ 23%] Built target qsim_test
+[ 23%] Building C object CMakeFiles/health_tests_test.dir/tests/health_tests_test.c.o
+[ 24%] Linking C executable health_tests_test
+[ 24%] Built target health_tests_test
+[ 24%] Building C object CMakeFiles/bell_test_demo.dir/tests/bell_test_demo.c.o
+[ 24%] Linking C executable bell_test_demo
+[ 24%] Built target bell_test_demo
+[ 24%] Building C object CMakeFiles/gate_test.dir/tests/gate_test.c.o
+[ 24%] Linking C executable gate_test
+[ 24%] Built target gate_test
+[ 24%] Building C object CMakeFiles/correlation_test.dir/tests/correlation_test.c.o
+[ 24%] Linking C executable correlation_test
+[ 24%] Built target correlation_test
+[ 24%] Building C object CMakeFiles/test_quantum_state.dir/tests/unit/test_quantum_state.c.o
+[ 24%] Linking C executable test_quantum_state
+[ 24%] Built target test_quantum_state
+[ 24%] Building C object CMakeFiles/test_constants.dir/tests/unit/test_constants.c.o
+[ 24%] Linking C executable test_constants
+[ 24%] Built target test_constants
+[ 24%] Building C object CMakeFiles/test_token_bucket.dir/tests/unit/test_token_bucket.c.o
+[ 24%] Linking C executable test_token_bucket
+[ 24%] Built target test_token_bucket
+[ 25%] Building C object CMakeFiles/test_audit_buffer.dir/tests/unit/test_audit_buffer.c.o
+[ 25%] Linking C executable test_audit_buffer
+[ 25%] Built target test_audit_buffer
+[ 25%] Building C object CMakeFiles/test_correctness_properties.dir/tests/unit/test_correctness_properties.c.o
+[ 25%] Linking C executable test_correctness_properties
+[ 25%] Built target test_correctness_properties
+[ 26%] Building C object CMakeFiles/test_quantum_gates.dir/tests/unit/test_quantum_gates.c.o
+[ 26%] Linking C executable test_quantum_gates
+[ 26%] Built target test_quantum_gates
+[ 26%] Building C object CMakeFiles/test_memory_align.dir/tests/unit/test_memory_align.c.o
+[ 26%] Building C object CMakeFiles/test_memory_align.dir/src/optimization/memory_align.c.o
+[ 27%] Linking C executable test_memory_align
+[ 27%] Built target test_memory_align
+[ 27%] Building C object CMakeFiles/test_simd_dispatch.dir/tests/unit/test_simd_dispatch.c.o
+[ 27%] Building C object CMakeFiles/test_simd_dispatch.dir/src/optimization/simd_dispatch.c.o
+[ 28%] Linking C executable test_simd_dispatch
+[ 28%] Built target test_simd_dispatch
+[ 28%] Building C object CMakeFiles/test_simd_dispatch_portability.dir/tests/unit/test_simd_dispatch_portability.c.o
+[ 28%] Linking C executable test_simd_dispatch_portability
+[ 28%] Built target test_simd_dispatch_portability
+[ 28%] Building C object CMakeFiles/test_tensor_network.dir/tests/unit/test_tensor_network.c.o
+[ 28%] Linking C executable test_tensor_network
+[ 28%] Built target test_tensor_network
+[ 28%] Building C object CMakeFiles/test_comprehensive.dir/tests/test_comprehensive.c.o
+[ 29%] Linking C executable test_comprehensive
+[ 29%] Built target test_comprehensive
+[ 29%] Building C object CMakeFiles/test_dmrg.dir/tests/test_dmrg.c.o
+[ 29%] Linking C executable test_dmrg
+[ 29%] Built target test_dmrg
+[ 29%] Building C object CMakeFiles/test_mps_vs_exact.dir/tests/test_mps_vs_exact.c.o
+[ 29%] Linking C executable test_mps_vs_exact
+[ 29%] Built target test_mps_vs_exact
+[ 29%] Building C object CMakeFiles/test_long_evolution.dir/tests/test_long_evolution.c.o
+[ 29%] Linking C executable test_long_evolution
+[ 29%] Built target test_long_evolution
+[ 29%] Building C object CMakeFiles/test_fast_measurement.dir/tests/test_fast_measurement.c.o
+[ 29%] Linking C executable test_fast_measurement
+[ 29%] Built target test_fast_measurement
+[ 29%] Building C object CMakeFiles/test_measurement.dir/tests/unit/test_measurement.c.o
+[ 29%] Linking C executable test_measurement
+[ 29%] Built target test_measurement
+[ 29%] Building C object CMakeFiles/test_entanglement.dir/tests/unit/test_entanglement.c.o
+[ 29%] Linking C executable test_entanglement
+[ 29%] Built target test_entanglement
+[ 29%] Building C object CMakeFiles/test_noise.dir/tests/unit/test_noise.c.o
+[ 29%] Linking C executable test_noise
+[ 29%] Built target test_noise
+[ 29%] Building C object CMakeFiles/test_noise_marginals.dir/tests/unit/test_noise_marginals.c.o
+[ 30%] Linking C executable test_noise_marginals
+[ 30%] Built target test_noise_marginals
+[ 31%] Building C object CMakeFiles/test_grover.dir/tests/unit/test_grover.c.o
+[ 31%] Linking C executable test_grover
+[ 31%] Built target test_grover
+[ 32%] Building C object CMakeFiles/test_vqe.dir/tests/unit/test_vqe.c.o
+[ 32%] Linking C executable test_vqe
+[ 32%] Built target test_vqe
+[ 32%] Building C object CMakeFiles/test_vqe_gradient_contract.dir/tests/unit/test_vqe_gradient_contract.c.o
+[ 32%] Linking C executable test_vqe_gradient_contract
+[ 32%] Built target test_vqe_gradient_contract
+[ 32%] Building C object CMakeFiles/test_qaoa.dir/tests/unit/test_qaoa.c.o
+[ 32%] Linking C executable test_qaoa
+[ 32%] Built target test_qaoa
+[ 33%] Building C object CMakeFiles/test_qaoa_gradient.dir/tests/unit/test_qaoa_gradient.c.o
+[ 33%] Linking C executable test_qaoa_gradient
+[ 33%] Built target test_qaoa_gradient
+[ 34%] Building C object CMakeFiles/test_qpe.dir/tests/unit/test_qpe.c.o
+[ 34%] Linking C executable test_qpe
+[ 34%] Built target test_qpe
+[ 34%] Building C object CMakeFiles/test_clifford_pauli_api.dir/tests/unit/test_clifford_pauli_api.c.o
+[ 34%] Linking C executable test_clifford_pauli_api
+[ 34%] Built target test_clifford_pauli_api
+[ 35%] Building C object CMakeFiles/test_ca_mps_limits.dir/tests/unit/test_ca_mps_limits.c.o
+[ 35%] Linking C executable test_ca_mps_limits
+[ 35%] Built target test_ca_mps_limits
+[ 35%] Building C object CMakeFiles/test_ca_peps.dir/tests/unit/test_ca_peps.c.o
+[ 35%] Linking C executable test_ca_peps
+[ 35%] Built target test_ca_peps
+[ 35%] Building C object CMakeFiles/test_pauli_frame.dir/tests/unit/test_pauli_frame.c.o
+[ 35%] Linking C executable test_pauli_frame
+[ 35%] Built target test_pauli_frame
+[ 36%] Building C object CMakeFiles/test_uf_decoder.dir/tests/unit/test_uf_decoder.c.o
+[ 36%] Linking C executable test_uf_decoder
+[ 36%] Built target test_uf_decoder
+[ 36%] Building C object CMakeFiles/test_stim_circuit.dir/tests/unit/test_stim_circuit.c.o
+[ 36%] Linking C executable test_stim_circuit
+[ 36%] Built target test_stim_circuit
+[ 37%] Building C object CMakeFiles/test_stim_dem.dir/tests/unit/test_stim_dem.c.o
+[ 37%] Linking C executable test_stim_dem
+[ 37%] Built target test_stim_dem
+[ 38%] Building C object CMakeFiles/test_ca_mps_vs_sv.dir/tests/unit/test_ca_mps_vs_sv.c.o
+[ 38%] Linking C executable test_ca_mps_vs_sv
+[ 38%] Built target test_ca_mps_vs_sv
+[ 38%] Building C object CMakeFiles/test_ca_mps_prob.dir/tests/unit/test_ca_mps_prob.c.o
+[ 38%] Linking C executable test_ca_mps_prob
+[ 38%] Built target test_ca_mps_prob
+[ 38%] Building C object CMakeFiles/test_ca_mps_sample.dir/tests/unit/test_ca_mps_sample.c.o
+[ 39%] Linking C executable test_ca_mps_sample
+[ 39%] Built target test_ca_mps_sample
+[ 40%] Building C object CMakeFiles/test_qgt_kane_mele_rashba.dir/tests/unit/test_qgt_kane_mele_rashba.c.o
+[ 40%] Linking C executable test_qgt_kane_mele_rashba
+[ 40%] Built target test_qgt_kane_mele_rashba
+[ 40%] Building C object CMakeFiles/test_svd_compress.dir/tests/unit/test_svd_compress.c.o
+[ 41%] Linking C executable test_svd_compress
+[ 41%] Built target test_svd_compress
+[ 41%] Building C object CMakeFiles/test_svd_noncanonical_axis.dir/tests/unit/test_svd_noncanonical_axis.c.o
+[ 41%] Linking C executable test_svd_noncanonical_axis
+[ 41%] Built target test_svd_noncanonical_axis
+[ 41%] Building C object CMakeFiles/test_tn_gate_order.dir/tests/unit/test_tn_gate_order.c.o
+[ 41%] Linking C executable test_tn_gate_order
+[ 41%] Built target test_tn_gate_order
+[ 41%] Building C object CMakeFiles/test_hermitian_eigen.dir/tests/unit/test_hermitian_eigen.c.o
+[ 41%] Linking C executable test_hermitian_eigen
+[ 41%] Built target test_hermitian_eigen
+[ 41%] Building C object CMakeFiles/test_qgt_phase_diagram.dir/tests/unit/test_qgt_phase_diagram.c.o
+[ 42%] Linking C executable test_qgt_phase_diagram
+[ 42%] Built target test_qgt_phase_diagram
+[ 42%] Building C object CMakeFiles/test_qgt_phase_diagram_2d.dir/tests/unit/test_qgt_phase_diagram_2d.c.o
+[ 42%] Linking C executable test_qgt_phase_diagram_2d
+[ 42%] Built target test_qgt_phase_diagram_2d
+[ 42%] Building C object CMakeFiles/test_tdvp_adaptive_config.dir/tests/unit/test_tdvp_adaptive_config.c.o
+[ 43%] Linking C executable test_tdvp_adaptive_config
+[ 43%] Built target test_tdvp_adaptive_config
+[ 43%] Building C object CMakeFiles/test_tdvp_adaptive_pid.dir/tests/unit/test_tdvp_adaptive_pid.c.o
+[ 43%] Linking C executable test_tdvp_adaptive_pid
+[ 43%] Built target test_tdvp_adaptive_pid
+[ 43%] Building C object CMakeFiles/test_tdvp_adaptive_energy_conservation.dir/tests/unit/test_tdvp_adaptive_energy_conservation.c.o
+[ 43%] Linking C executable test_tdvp_adaptive_energy_conservation
+[ 43%] Built target test_tdvp_adaptive_energy_conservation
+[ 43%] Building C object CMakeFiles/test_tdvp_adaptive_tfim_ground.dir/tests/unit/test_tdvp_adaptive_tfim_ground.c.o
+[ 44%] Linking C executable test_tdvp_adaptive_tfim_ground
+[ 44%] Built target test_tdvp_adaptive_tfim_ground
+[ 45%] Building C object CMakeFiles/test_tdvp_adaptive_pid_stability.dir/tests/unit/test_tdvp_adaptive_pid_stability.c.o
+[ 45%] Linking C executable test_tdvp_adaptive_pid_stability
+[ 45%] Built target test_tdvp_adaptive_pid_stability
+[ 45%] Building C object CMakeFiles/test_tdvp_adaptive_second_svd.dir/tests/unit/test_tdvp_adaptive_second_svd.c.o
+[ 45%] Linking C executable test_tdvp_adaptive_second_svd
+[ 45%] Built target test_tdvp_adaptive_second_svd
+[ 45%] Building C object CMakeFiles/test_tdvp_validation.dir/tests/unit/test_tdvp_validation.c.o
+[ 46%] Linking C executable test_tdvp_validation
+[ 46%] Built target test_tdvp_validation
+[ 46%] Building C object CMakeFiles/test_tdvp_bulk_site.dir/tests/unit/test_tdvp_bulk_site.c.o
+[ 46%] Linking C executable test_tdvp_bulk_site
+[ 46%] Built target test_tdvp_bulk_site
+[ 46%] Building C object CMakeFiles/test_ca_mps_bond_advantage.dir/tests/unit/test_ca_mps_bond_advantage.c.o
+[ 46%] Linking C executable test_ca_mps_bond_advantage
+[ 46%] Built target test_ca_mps_bond_advantage
+[ 46%] Building C object CMakeFiles/test_ca_mps_heisenberg.dir/tests/unit/test_ca_mps_heisenberg.c.o
+[ 46%] Linking C executable test_ca_mps_heisenberg
+[ 46%] Built target test_ca_mps_heisenberg
+[ 47%] Building C object CMakeFiles/test_ca_mps_imag_time.dir/tests/unit/test_ca_mps_imag_time.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_ca_mps_imag_time.c:65:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+   65 |     zheev_(&jobz, &uplo, &nn, (__CLPK_doublecomplex*)H, &lda, w, &wq, &lwork_q, rwork, &info);
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_ca_mps_imag_time.c:69:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+   69 |     zheev_(&jobz, &uplo, &nn, (__CLPK_doublecomplex*)H, &lda, w,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+2 warnings generated.
+[ 47%] Linking C executable test_ca_mps_imag_time
+[ 47%] Built target test_ca_mps_imag_time
+[ 47%] Building C object CMakeFiles/test_ca_mps_var_d.dir/tests/unit/test_ca_mps_var_d.c.o
+[ 47%] Linking C executable test_ca_mps_var_d
+[ 47%] Built target test_ca_mps_var_d
+[ 47%] Building C object CMakeFiles/test_ca_mps_var_d_large.dir/tests/unit/test_ca_mps_var_d_large.c.o
+[ 47%] Linking C executable test_ca_mps_var_d_large
+[ 47%] Built target test_ca_mps_var_d_large
+[ 47%] Building C object CMakeFiles/test_ca_mps_var_d_alt.dir/tests/unit/test_ca_mps_var_d_alt.c.o
+[ 48%] Linking C executable test_ca_mps_var_d_alt
+[ 48%] Built target test_ca_mps_var_d_alt
+[ 48%] Building C object CMakeFiles/test_ca_mps_var_d_composite.dir/tests/unit/test_ca_mps_var_d_composite.c.o
+[ 48%] Linking C executable test_ca_mps_var_d_composite
+[ 48%] Built target test_ca_mps_var_d_composite
+[ 48%] Building C object CMakeFiles/test_z2_lgt_pauli_sum.dir/tests/unit/test_z2_lgt_pauli_sum.c.o
+[ 48%] Linking C executable test_z2_lgt_pauli_sum
+[ 48%] Built target test_z2_lgt_pauli_sum
+[ 48%] Building C object CMakeFiles/test_gauge_warmstart.dir/tests/unit/test_gauge_warmstart.c.o
+[ 48%] Linking C executable test_gauge_warmstart
+[ 48%] Built target test_gauge_warmstart
+[ 49%] Building C object CMakeFiles/test_qgt_integrators.dir/tests/unit/test_qgt_integrators.c.o
+[ 49%] Linking C executable test_qgt_integrators
+[ 49%] Built target test_qgt_integrators
+[ 49%] Building C object CMakeFiles/test_qgt_kane_mele.dir/tests/unit/test_qgt_kane_mele.c.o
+[ 49%] Linking C executable test_qgt_kane_mele
+[ 49%] Built target test_qgt_kane_mele
+[ 49%] Building C object CMakeFiles/test_qgt_bhz.dir/tests/unit/test_qgt_bhz.c.o
+[ 50%] Linking C executable test_qgt_bhz
+[ 50%] Built target test_qgt_bhz
+[ 50%] Building C object CMakeFiles/test_qgt_kitaev_chain.dir/tests/unit/test_qgt_kitaev_chain.c.o
+[ 50%] Linking C executable test_qgt_kitaev_chain
+[ 50%] Built target test_qgt_kitaev_chain
+[ 50%] Building C object CMakeFiles/test_qgt_hofstadter.dir/tests/unit/test_qgt_hofstadter.c.o
+[ 50%] Linking C executable test_qgt_hofstadter
+[ 50%] Built target test_qgt_hofstadter
+[ 50%] Building C object CMakeFiles/test_qgt_vs_chern_marker.dir/tests/unit/test_qgt_vs_chern_marker.c.o
+[ 51%] Linking C executable test_qgt_vs_chern_marker
+[ 51%] Built target test_qgt_vs_chern_marker
+[ 51%] Building C object CMakeFiles/test_mpdo_smoke.dir/tests/unit/test_mpdo_smoke.c.o
+[ 52%] Linking C executable test_mpdo_smoke
+[ 52%] Built target test_mpdo_smoke
+[ 52%] Building C object CMakeFiles/test_imag_pauli_2q_smoke.dir/tests/unit/test_imag_pauli_2q_smoke.c.o
+[ 52%] Linking C executable test_imag_pauli_2q_smoke
+[ 52%] Built target test_imag_pauli_2q_smoke
+[ 52%] Building C object CMakeFiles/test_tn_mps_from_statevector.dir/tests/unit/test_tn_mps_from_statevector.c.o
+[ 52%] Linking C executable test_tn_mps_from_statevector
+[ 52%] Built target test_tn_mps_from_statevector
+[ 52%] Building C object CMakeFiles/test_tn_mps_interior_gate.dir/tests/unit/test_tn_mps_interior_gate.c.o
+[ 53%] Linking C executable test_tn_mps_interior_gate
+[ 53%] Built target test_tn_mps_interior_gate
+[ 54%] Building C object CMakeFiles/test_tn_mps_deep_forward.dir/tests/unit/test_tn_mps_deep_forward.c.o
+[ 54%] Linking C executable test_tn_mps_deep_forward
+[ 54%] Built target test_tn_mps_deep_forward
+[ 54%] Building C object CMakeFiles/test_moonlab_status.dir/tests/unit/test_moonlab_status.c.o
+[ 54%] Linking C executable test_moonlab_status
+[ 54%] Built target test_moonlab_status
+[ 55%] Building C object CMakeFiles/test_tn_dead_code_smoke.dir/tests/unit/test_tn_dead_code_smoke.c.o
+[ 55%] Linking C executable test_tn_dead_code_smoke
+[ 55%] Built target test_tn_dead_code_smoke
+[ 55%] Building C object CMakeFiles/test_mbl_smoke.dir/tests/unit/test_mbl_smoke.c.o
+[ 56%] Linking C executable test_mbl_smoke
+[ 56%] Built target test_mbl_smoke
+[ 56%] Building C object CMakeFiles/test_ca_mps_kagome12.dir/tests/unit/test_ca_mps_kagome12.c.o
+[ 56%] Linking C executable test_ca_mps_kagome12
+[ 56%] Built target test_ca_mps_kagome12
+[ 57%] Building C object CMakeFiles/test_clifford.dir/tests/unit/test_clifford.c.o
+[ 57%] Linking C executable test_clifford
+[ 57%] Built target test_clifford
+[ 57%] Building C object CMakeFiles/test_clifford_rowsum.dir/tests/unit/test_clifford_rowsum.c.o
+[ 58%] Linking C executable test_clifford_rowsum
+[ 58%] Built target test_clifford_rowsum
+[ 59%] Building C object CMakeFiles/test_fusion.dir/tests/unit/test_fusion.c.o
+[ 59%] Linking C executable test_fusion
+[ 59%] Built target test_fusion
+[ 59%] Building C object CMakeFiles/test_quantum_volume.dir/tests/unit/test_quantum_volume.c.o
+[ 60%] Linking C executable test_quantum_volume
+[ 60%] Built target test_quantum_volume
+[ 60%] Building C object CMakeFiles/test_surface_code_clifford.dir/tests/unit/test_surface_code_clifford.c.o
+[ 60%] Linking C executable test_surface_code_clifford
+[ 60%] Built target test_surface_code_clifford
+[ 60%] Building C object CMakeFiles/test_chern_marker.dir/tests/unit/test_chern_marker.c.o
+[ 60%] Linking C executable test_chern_marker
+[ 60%] Built target test_chern_marker
+[ 61%] Building C object CMakeFiles/test_matrix_math.dir/tests/unit/test_matrix_math.c.o
+[ 61%] Linking C executable test_matrix_math
+[ 61%] Built target test_matrix_math
+[ 61%] Building C object CMakeFiles/test_chern_kpm.dir/tests/unit/test_chern_kpm.c.o
+[ 62%] Linking C executable test_chern_kpm
+[ 62%] Built target test_chern_kpm
+[ 62%] Building C object CMakeFiles/test_chern_fhs.dir/tests/unit/test_chern_fhs.c.o
+[ 62%] Linking C executable test_chern_fhs
+[ 62%] Built target test_chern_fhs
+[ 62%] Building C object CMakeFiles/test_mpo_kpm.dir/tests/unit/test_mpo_kpm.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_mpo_kpm.c:180:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  180 |     zheev_(&jobz, &uplo, &n_c, (__CLPK_doublecomplex*)A, &lda_c,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_mpo_kpm.c:194:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  194 |     zheev_(&jobz, &uplo, &n_c, (__CLPK_doublecomplex*)A, &lda_c,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+2 warnings generated.
+[ 62%] Linking C executable test_mpo_kpm
+[ 62%] Built target test_mpo_kpm
+[ 62%] Building C object CMakeFiles/test_gpu_backend_discovery.dir/tests/unit/test_gpu_backend_discovery.c.o
+[ 62%] Linking C executable test_gpu_backend_discovery
+[ 62%] Built target test_gpu_backend_discovery
+[ 62%] Building C object CMakeFiles/test_tensor_adversarial.dir/tests/unit/test_tensor_adversarial.c.o
+[ 62%] Linking C executable test_tensor_adversarial
+[ 62%] Built target test_tensor_adversarial
+[ 62%] Building C object CMakeFiles/test_differentiable.dir/tests/unit/test_differentiable.c.o
+[ 62%] Linking C executable test_differentiable
+[ 62%] Built target test_differentiable
+[ 62%] Building C object CMakeFiles/test_bell_variants.dir/tests/unit/test_bell_variants.c.o
+[ 63%] Linking C executable test_bell_variants
+[ 63%] Built target test_bell_variants
+[ 63%] Building C object CMakeFiles/test_zne.dir/tests/unit/test_zne.c.o
+[ 64%] Linking C executable test_zne
+[ 64%] Built target test_zne
+[ 64%] Building C object CMakeFiles/test_povm.dir/tests/unit/test_povm.c.o
+[ 64%] Linking C executable test_povm
+[ 64%] Built target test_povm
+[ 65%] Building C object CMakeFiles/test_mutual_info.dir/tests/unit/test_mutual_info.c.o
+[ 65%] Linking C executable test_mutual_info
+[ 65%] Built target test_mutual_info
+[ 65%] Building C object CMakeFiles/test_qrng_di.dir/tests/unit/test_qrng_di.c.o
+[ 65%] Linking C executable test_qrng_di
+[ 65%] Built target test_qrng_di
+[ 65%] Building C object CMakeFiles/test_composite_noise.dir/tests/unit/test_composite_noise.c.o
+[ 65%] Linking C executable test_composite_noise
+[ 65%] Built target test_composite_noise
+[ 65%] Building C object CMakeFiles/test_sha3.dir/tests/unit/test_sha3.c.o
+[ 66%] Linking C executable test_sha3
+[ 66%] Built target test_sha3
+[ 66%] Building C object CMakeFiles/test_mlkem_poly.dir/tests/unit/test_mlkem_poly.c.o
+[ 66%] Linking C executable test_mlkem_poly
+[ 66%] Built target test_mlkem_poly
+[ 66%] Building C object CMakeFiles/test_mlkem.dir/tests/unit/test_mlkem.c.o
+[ 66%] Linking C executable test_mlkem
+[ 66%] Built target test_mlkem
+[ 67%] Building C object CMakeFiles/test_aes_drbg.dir/tests/unit/test_aes_drbg.c.o
+[ 67%] Linking C executable test_aes_drbg
+[ 67%] Built target test_aes_drbg
+[ 68%] Building C object CMakeFiles/test_mlkem_nist_kat.dir/tests/unit/test_mlkem_nist_kat.c.o
+[ 68%] Linking C executable test_mlkem_nist_kat
+[ 68%] Built target test_mlkem_nist_kat
+[ 68%] Building C object CMakeFiles/test_mlkem_acvp.dir/tests/unit/test_mlkem_acvp.c.o
+[ 68%] Linking C executable test_mlkem_acvp
+[ 68%] Built target test_mlkem_acvp
+[ 68%] Building C object CMakeFiles/test_manifest.dir/tests/unit/test_manifest.c.o
+[ 68%] Linking C executable test_manifest
+[ 68%] Built target test_manifest
+[ 68%] Building C object CMakeFiles/test_qgt.dir/tests/unit/test_qgt.c.o
+[ 68%] Linking C executable test_qgt
+[ 68%] Built target test_qgt
+[ 68%] Building C object CMakeFiles/test_qgt_exact_curvature.dir/tests/unit/test_qgt_exact_curvature.c.o
+[ 68%] Linking C executable test_qgt_exact_curvature
+[ 68%] Built target test_qgt_exact_curvature
+[ 68%] Building C object CMakeFiles/test_shor_ecdlp.dir/tests/unit/test_shor_ecdlp.c.o
+[ 68%] Linking C executable test_shor_ecdlp
+[ 68%] Built target test_shor_ecdlp
+[ 68%] Building CXX object CMakeFiles/test_gpu_eshkol.dir/tests/unit/test_gpu_eshkol.cpp.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_gpu_eshkol.cpp:72:5: warning: 'cblas_zgemm' is deprecated: first deprecated in macOS 13.3 - An updated CBLAS interface supporting ILP64 is available.  Please compile with -DACCELERATE_NEW_LAPACK to access the new headers and -DACCELERATE_LAPACK_ILP64 for ILP64 support. [-Wdeprecated-declarations]
+   72 |     cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/cblas.h:719:6: note: 'cblas_zgemm' has been explicitly marked deprecated here
+  719 | void cblas_zgemm(const enum CBLAS_ORDER __Order,
+      |      ^
+1 warning generated.
+[ 69%] Linking CXX executable test_gpu_eshkol
+[ 69%] Built target test_gpu_eshkol
+[ 69%] Building C object CMakeFiles/test_chemistry.dir/tests/unit/test_chemistry.c.o
+[ 70%] Linking C executable test_chemistry
+[ 70%] Built target test_chemistry
+[ 70%] Building C object CMakeFiles/test_topological.dir/tests/unit/test_topological.c.o
+[ 70%] Linking C executable test_topological
+[ 70%] Built target test_topological
+[ 70%] Building C object CMakeFiles/test_mbl.dir/tests/unit/test_mbl.c.o
+[ 70%] Linking C executable test_mbl
+[ 70%] Built target test_mbl
+[ 70%] Building C object CMakeFiles/test_simd_parity.dir/tests/unit/test_simd_parity.c.o
+[ 71%] Linking C executable test_simd_parity
+[ 71%] Built target test_simd_parity
+[ 71%] Building C object CMakeFiles/test_metal_parity.dir/tests/unit/test_metal_parity.c.o
+[ 72%] Linking C executable test_metal_parity
+[ 72%] Built target test_metal_parity
+[ 72%] Building C object CMakeFiles/test_gpu_sync_contract.dir/tests/unit/test_gpu_sync_contract.c.o
+[ 72%] Linking C executable test_gpu_sync_contract
+[ 72%] Built target test_gpu_sync_contract
+[ 72%] Building C object CMakeFiles/test_measurement_edge.dir/tests/unit/test_measurement_edge.c.o
+[ 73%] Linking C executable test_measurement_edge
+[ 73%] Built target test_measurement_edge
+[ 73%] Building C object CMakeFiles/test_povm_cache.dir/tests/unit/test_povm_cache.c.o
+[ 73%] Linking C executable test_povm_cache
+[ 73%] Built target test_povm_cache
+[ 73%] Building C object CMakeFiles/test_metal_mps_parity.dir/tests/unit/test_metal_mps_parity.c.o
+[ 73%] Linking C executable test_metal_mps_parity
+[ 73%] Built target test_metal_mps_parity
+[ 73%] Building C object CMakeFiles/test_lattice_2d.dir/tests/unit/test_lattice_2d.c.o
+[ 74%] Linking C executable test_lattice_2d
+[ 74%] Built target test_lattice_2d
+[ 75%] Building C object CMakeFiles/test_kagome_ed.dir/tests/unit/test_kagome_ed.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_kagome_ed.c:122:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  122 |     zheev_(&jobz, &uplo, &n_c, (__CLPK_doublecomplex *)H, &lda_c,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_kagome_ed.c:136:5: warning: 'zheev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  136 |     zheev_(&jobz, &uplo, &n_c, (__CLPK_doublecomplex *)H, &lda_c,
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:8595:5: note: 'zheev_' has been explicitly marked deprecated here
+ 8595 | int zheev_(char *__jobz, char *__uplo, __CLPK_integer *__n,
+      |     ^
+2 warnings generated.
+[ 75%] Linking C executable test_kagome_ed
+[ 75%] Built target test_kagome_ed
+[ 75%] Building C object CMakeFiles/test_kagome_ed_large.dir/tests/unit/test_kagome_ed_large.c.o
+/Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/tests/unit/test_kagome_ed_large.c:123:5: warning: 'dstev_' is deprecated: first deprecated in macOS 13.3 - The CLAPACK interface is deprecated.  Please compile with -DACCELERATE_NEW_LAPACK to access the new lapack headers. [-Wdeprecated-declarations]
+  123 |     dstev_(&jobz, &nn, d, e, NULL, &ldz, &work_dummy, &info);
+      |     ^
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/vecLib.framework/Headers/clapack.h:4763:5: note: 'dstev_' has been explicitly marked deprecated here
+ 4763 | int dstev_(char *__jobz, __CLPK_integer *__n, __CLPK_doublereal *__d__,
+      |     ^
+1 warning generated.
+[ 75%] Linking C executable test_kagome_ed_large
+[ 75%] Built target test_kagome_ed_large
+[ 75%] Building C object CMakeFiles/test_libirrep_sector_ed.dir/tests/unit/test_libirrep_sector_ed.c.o
+[ 76%] Linking C executable test_libirrep_sector_ed
+[ 76%] Built target test_libirrep_sector_ed
+[ 76%] Building C object CMakeFiles/test_libirrep_css.dir/tests/unit/test_libirrep_css.c.o
+[ 76%] Linking C executable test_libirrep_css
+[ 76%] Built target test_libirrep_css
+[ 76%] Building C object CMakeFiles/test_qgtl_backend.dir/tests/unit/test_qgtl_backend.c.o
+[ 76%] Linking C executable test_qgtl_backend
+[ 76%] Built target test_qgtl_backend
+[ 76%] Building C object CMakeFiles/test_qgtl_circuit_io.dir/tests/unit/test_qgtl_circuit_io.c.o
+[ 76%] Linking C executable test_qgtl_circuit_io
+[ 76%] Built target test_qgtl_circuit_io
+[ 76%] Building C object CMakeFiles/test_control_plane.dir/tests/integration/test_control_plane.c.o
+[ 76%] Linking C executable test_control_plane
+[ 76%] Built target test_control_plane
+[ 76%] Building C object CMakeFiles/test_control_plane_concurrent.dir/tests/integration/test_control_plane_concurrent.c.o
+[ 76%] Linking C executable test_control_plane_concurrent
+[ 76%] Built target test_control_plane_concurrent
+[ 77%] Building C object CMakeFiles/test_control_plane_shots.dir/tests/integration/test_control_plane_shots.c.o
+[ 77%] Linking C executable test_control_plane_shots
+[ 77%] Built target test_control_plane_shots
+[ 77%] Building C object CMakeFiles/test_control_plane_shutdown.dir/tests/integration/test_control_plane_shutdown.c.o
+[ 77%] Linking C executable test_control_plane_shutdown
+[ 77%] Built target test_control_plane_shutdown
+[ 78%] Building C object CMakeFiles/test_control_plane_auth.dir/tests/integration/test_control_plane_auth.c.o
+[ 78%] Linking C executable test_control_plane_auth
+[ 78%] Built target test_control_plane_auth
+[ 79%] Building C object CMakeFiles/test_control_plane_tenant.dir/tests/integration/test_control_plane_tenant.c.o
+[ 79%] Linking C executable test_control_plane_tenant
+[ 79%] Built target test_control_plane_tenant
+[ 79%] Building C object CMakeFiles/test_control_plane_tls.dir/tests/integration/test_control_plane_tls.c.o
+[ 80%] Linking C executable test_control_plane_tls
+[ 80%] Built target test_control_plane_tls
+[ 80%] Building C object CMakeFiles/test_control_plane_mtls.dir/tests/integration/test_control_plane_mtls.c.o
+[ 80%] Linking C executable test_control_plane_mtls
+[ 80%] Built target test_control_plane_mtls
+[ 80%] Building C object CMakeFiles/test_control_plane_health_rate.dir/tests/integration/test_control_plane_health_rate.c.o
+[ 80%] Linking C executable test_control_plane_health_rate
+[ 80%] Built target test_control_plane_health_rate
+[ 80%] Building C object CMakeFiles/test_control_plane_metrics.dir/tests/integration/test_control_plane_metrics.c.o
+[ 80%] Linking C executable test_control_plane_metrics
+[ 80%] Built target test_control_plane_metrics
+[ 80%] Building C object CMakeFiles/test_control_plane_timeout.dir/tests/integration/test_control_plane_timeout.c.o
+[ 80%] Linking C executable test_control_plane_timeout
+[ 80%] Built target test_control_plane_timeout
+[ 80%] Building C object CMakeFiles/test_control_plane_ipv6.dir/tests/integration/test_control_plane_ipv6.c.o
+[ 81%] Linking C executable test_control_plane_ipv6
+[ 81%] Built target test_control_plane_ipv6
+[ 82%] Building C object CMakeFiles/test_control_plane_hardening.dir/tests/integration/test_control_plane_hardening.c.o
+[ 82%] Linking C executable test_control_plane_hardening
+[ 82%] Built target test_control_plane_hardening
+[ 82%] Building C object CMakeFiles/test_decoder_bench.dir/tests/unit/test_decoder_bench.c.o
+[ 83%] Linking C executable test_decoder_bench
+[ 83%] Built target test_decoder_bench
+[ 83%] Building C object CMakeFiles/test_scheduler.dir/tests/unit/test_scheduler.c.o
+[ 83%] Linking C executable test_scheduler
+[ 83%] Built target test_scheduler
+[ 83%] Building C object CMakeFiles/test_vendor_noise_backend.dir/tests/unit/test_vendor_noise_backend.c.o
+[ 83%] Linking C executable test_vendor_noise_backend
+[ 83%] Built target test_vendor_noise_backend
+[ 83%] Building C object CMakeFiles/test_gpu_backend_correctness.dir/tests/integration/test_gpu_backend_correctness.c.o
+[ 84%] Linking C executable test_gpu_backend_correctness
+[ 84%] Built target test_gpu_backend_correctness
+[ 84%] Building C object CMakeFiles/test_platform_integration.dir/tests/integration/test_platform_integration.c.o
+[ 85%] Linking C executable test_platform_integration
+[ 85%] Built target test_platform_integration
+[ 85%] Building C object CMakeFiles/test_skyrmion.dir/tests/unit/test_skyrmion.c.o
+[ 85%] Linking C executable test_skyrmion
+[ 85%] Built target test_skyrmion
+[ 85%] Building C object CMakeFiles/test_feynman.dir/tests/unit/test_feynman.c.o
+[ 85%] Linking C executable test_feynman
+[ 85%] Built target test_feynman
+[ 85%] Building C object CMakeFiles/test_circuit_diagram.dir/tests/unit/test_circuit_diagram.c.o
+[ 85%] Linking C executable test_circuit_diagram
+[ 85%] Built target test_circuit_diagram
+[ 85%] Building C object CMakeFiles/test_entropy_pool.dir/tests/unit/test_entropy_pool.c.o
+[ 85%] Linking C executable test_entropy_pool
+[ 85%] Built target test_entropy_pool
+[ 85%] Building C object CMakeFiles/test_entropy_sources.dir/tests/unit/test_entropy_sources.c.o
+[ 86%] Linking C executable test_entropy_sources
+[ 86%] Built target test_entropy_sources
+[ 86%] Building C object CMakeFiles/test_entropy_jitter.dir/tests/unit/test_entropy_jitter.c.o
+[ 87%] Linking C executable test_entropy_jitter
+[ 87%] Built target test_entropy_jitter
+[ 87%] Building C object CMakeFiles/test_hardware_entropy_probe.dir/tests/unit/test_hardware_entropy_probe.c.o
+[ 87%] Building C object CMakeFiles/test_hardware_entropy_probe.dir/src/applications/hardware_entropy.c.o
+[ 88%] Linking C executable test_hardware_entropy_probe
+[ 88%] Built target test_hardware_entropy_probe
+[ 88%] Building C object CMakeFiles/test_qrng_statistics.dir/tests/unit/test_qrng_statistics.c.o
+[ 89%] Linking C executable test_qrng_statistics
+[ 89%] Built target test_qrng_statistics
+[ 89%] Building C object CMakeFiles/test_qrng_thread_safety.dir/tests/unit/test_qrng_thread_safety.c.o
+[ 89%] Linking C executable test_qrng_thread_safety
+[ 89%] Built target test_qrng_thread_safety
+[ 89%] Building C object CMakeFiles/test_qrng_delivery.dir/tests/unit/test_qrng_delivery.c.o
+[ 90%] Linking C executable test_qrng_delivery
+[ 90%] Built target test_qrng_delivery
+[ 90%] Building C object CMakeFiles/test_qrng_bell_certified_output.dir/tests/unit/test_qrng_bell_certified_output.c.o
+[ 90%] Linking C executable test_qrng_bell_certified_output
+[ 90%] Built target test_qrng_bell_certified_output
+[ 90%] Building C object CMakeFiles/test_moonlab_export_abi.dir/tests/abi/test_moonlab_export_abi.c.o
+[ 91%] Linking C executable test_moonlab_export_abi
+[ 91%] Built target test_moonlab_export_abi
+[ 91%] Building C object CMakeFiles/test_backend_differential.dir/tests/oracle/test_backend_differential.c.o
+[ 91%] Linking C executable test_backend_differential
+[ 91%] Built target test_backend_differential
+[ 91%] Building C object CMakeFiles/test_gradient_oracle.dir/tests/oracle/test_gradient_oracle.c.o
+[ 91%] Linking C executable test_gradient_oracle
+[ 91%] Built target test_gradient_oracle
+[ 91%] Building C object CMakeFiles/test_measurement_oracle.dir/tests/oracle/test_measurement_oracle.c.o
+[ 91%] Linking C executable test_measurement_oracle
+[ 91%] Built target test_measurement_oracle
+[ 92%] Building C object CMakeFiles/test_edge_matrix.dir/tests/oracle/test_edge_matrix.c.o
+[ 92%] Linking C executable test_edge_matrix
+[ 92%] Built target test_edge_matrix
+[ 93%] Building C object CMakeFiles/test_property_invariants.dir/tests/oracle/test_property_invariants.c.o
+[ 93%] Linking C executable test_property_invariants
+[ 93%] Built target test_property_invariants
+[ 93%] Building C object CMakeFiles/test_analyticity_oracle.dir/tests/oracle/test_analyticity_oracle.c.o
+[ 93%] Linking C executable test_analyticity_oracle
+[ 93%] Built target test_analyticity_oracle
+[ 93%] Building C object CMakeFiles/test_wick_rotation_oracle.dir/tests/oracle/test_wick_rotation_oracle.c.o
+[ 94%] Linking C executable test_wick_rotation_oracle
+[ 94%] Built target test_wick_rotation_oracle
+[ 94%] Building C object CMakeFiles/test_quantum_annealing.dir/tests/unit/test_quantum_annealing.c.o
+[ 94%] Linking C executable test_quantum_annealing
+[ 94%] Built target test_quantum_annealing
+[ 94%] Building C object CMakeFiles/seeded_shots_replay_probe.dir/tools/seeded_shots_replay_probe.c.o
+[ 94%] Linking C executable seeded_shots_replay_probe
+[ 94%] Built target seeded_shots_replay_probe
+[ 94%] Building C object tests/statistical/CMakeFiles/stat_qrng_battery.dir/test_qrng_battery.c.o
+[ 94%] Linking C executable stat_qrng_battery
+[ 94%] Built target stat_qrng_battery
+[ 94%] Building C object tests/statistical/CMakeFiles/stat_mlkem_adversarial.dir/test_mlkem_adversarial.c.o
+[ 94%] Linking C executable stat_mlkem_adversarial
+[ 94%] Built target stat_mlkem_adversarial
+[ 94%] Building C object tests/statistical/CMakeFiles/stat_mlkem_timing.dir/test_mlkem_timing.c.o
+[ 95%] Linking C executable stat_mlkem_timing
+[ 95%] Built target stat_mlkem_timing
+[ 95%] Building C object tests/statistical/CMakeFiles/stat_entropy_health_adversarial.dir/test_entropy_health_adversarial.c.o
+[ 96%] Linking C executable stat_entropy_health_adversarial
+[ 96%] Built target stat_entropy_health_adversarial
+[ 97%] Building C object tests/differential/CMakeFiles/diff_backends.dir/diff_backends.c.o
+[ 97%] Linking C executable diff_backends
+[ 97%] Built target diff_backends
+[ 97%] Building C object tests/numerical/CMakeFiles/t_rotations.dir/t_rotations.c.o
+[ 98%] Linking C executable t_rotations
+[ 98%] Built target t_rotations
+[ 98%] Building C object tests/numerical/CMakeFiles/t_qft.dir/t_qft.c.o
+[ 98%] Linking C executable t_qft
+[ 98%] Built target t_qft
+[ 99%] Building C object tests/numerical/CMakeFiles/t_measure.dir/t_measure.c.o
+[ 99%] Linking C executable t_measure
+[ 99%] Built target t_measure
+[ 99%] Building C object tests/numerical/CMakeFiles/t_dmrg.dir/t_dmrg.c.o
+[ 99%] Linking C executable t_dmrg
+[ 99%] Built target t_dmrg
+[ 99%] Building C object tests/numerical/CMakeFiles/t_eigen_lapack.dir/t_eigen.c.o
+[ 99%] Linking C executable t_eigen_lapack
+[ 99%] Built target t_eigen_lapack
+[ 99%] Building C object tests/numerical/CMakeFiles/t_svd_lapack.dir/t_svd.c.o
+[ 99%] Linking C executable t_svd_lapack
+[ 99%] Built target t_svd_lapack
+[ 99%] Building C object tests/numerical/CMakeFiles/num_eigen_jacobi_obj.dir/__/__/src/utils/matrix_math.c.o
+[ 99%] Built target num_eigen_jacobi_obj
+[100%] Building C object tests/numerical/CMakeFiles/t_eigen_jacobi.dir/t_eigen.c.o
+[100%] Linking C executable t_eigen_jacobi
+[100%] Built target t_eigen_jacobi
+[100%] Building C object tests/numerical/CMakeFiles/num_svd_fallback_obj.dir/__/__/src/algorithms/tensor_network/tensor.c.o
+[100%] Building C object tests/numerical/CMakeFiles/num_svd_fallback_obj.dir/gpu_stubs.c.o
+[100%] Built target num_svd_fallback_obj
+[100%] Building C object tests/numerical/CMakeFiles/t_svd_fallback.dir/t_svd.c.o
+[100%] Linking C executable t_svd_fallback
+[100%] Built target t_svd_fallback
+Test project /Users/tyr/Desktop/quantum_simulator/.worktrees/astra-v121-certification-final/build/mesh-release-smoke/20260909T022230Z/atlas-src/build-mesh-release-smoke
+      Start   4: gate_test
+ 1/32 Test   #4: gate_test .............................   Passed    0.26 sec
+      Start   5: correlation_test
+ 2/32 Test   #5: correlation_test ......................   Passed    0.12 sec
+      Start   6: unit_quantum_state
+ 3/32 Test   #6: unit_quantum_state ....................   Passed    0.12 sec
+      Start   7: unit_constants
+ 4/32 Test   #7: unit_constants ........................   Passed    0.11 sec
+      Start  10: unit_correctness_properties
+ 5/32 Test  #10: unit_correctness_properties ...........   Passed    0.12 sec
+      Start  11: unit_quantum_gates
+ 6/32 Test  #11: unit_quantum_gates ....................   Passed    0.12 sec
+      Start  12: unit_memory_align
+ 7/32 Test  #12: unit_memory_align .....................   Passed    0.12 sec
+      Start  13: unit_simd_dispatch
+ 8/32 Test  #13: unit_simd_dispatch ....................   Passed    0.11 sec
+      Start  16: comprehensive
+ 9/32 Test  #16: comprehensive .........................   Passed    0.12 sec
+      Start  20: fast_measurement
+10/32 Test  #20: fast_measurement ......................   Passed    0.13 sec
+      Start  21: unit_measurement
+11/32 Test  #21: unit_measurement ......................   Passed    0.12 sec
+      Start  22: unit_entanglement
+12/32 Test  #22: unit_entanglement .....................   Passed    0.12 sec
+      Start  23: unit_noise
+13/32 Test  #23: unit_noise ............................   Passed    0.18 sec
+      Start  42: unit_svd_compress
+14/32 Test  #42: unit_svd_compress .....................   Passed    0.12 sec
+      Start  45: unit_hermitian_eigen
+15/32 Test  #45: unit_hermitian_eigen ..................   Passed    0.12 sec
+      Start  76: unit_moonlab_status
+16/32 Test  #76: unit_moonlab_status ...................   Passed    0.12 sec
+      Start  82: unit_fusion
+17/32 Test  #82: unit_fusion ...........................   Passed    0.13 sec
+      Start  86: unit_matrix_math
+18/32 Test  #86: unit_matrix_math ......................   Passed    0.12 sec
+      Start  89: gpu_backend_discovery
+19/32 Test  #89: gpu_backend_discovery .................   Passed    0.26 sec
+      Start  93: unit_zne
+20/32 Test  #93: unit_zne ..............................   Passed    0.12 sec
+      Start  94: unit_povm
+21/32 Test  #94: unit_povm .............................   Passed    0.12 sec
+      Start  95: unit_mutual_info
+22/32 Test  #95: unit_mutual_info ......................   Passed    0.12 sec
+      Start  97: unit_composite_noise
+23/32 Test  #97: unit_composite_noise ..................   Passed    0.12 sec
+      Start 109: unit_gpu_eshkol
+24/32 Test #109: unit_gpu_eshkol .......................   Passed    0.18 sec
+      Start 113: unit_simd_parity
+25/32 Test #113: unit_simd_parity ......................   Passed    0.12 sec
+      Start 114: unit_metal_parity
+26/32 Test #114: unit_metal_parity .....................   Passed    0.15 sec
+      Start 115: gpu_sync_contract
+27/32 Test #115: gpu_sync_contract .....................   Passed    0.12 sec
+      Start 116: unit_measurement_edge
+28/32 Test #116: unit_measurement_edge .................   Passed    0.12 sec
+      Start 117: unit_povm_cache
+29/32 Test #117: unit_povm_cache .......................   Passed    0.12 sec
+      Start 118: gpu_metal_mps_parity
+30/32 Test #118: gpu_metal_mps_parity ..................   Passed    0.59 sec
+      Start 142: integration_gpu_backend_correctness
+31/32 Test #142: integration_gpu_backend_correctness ...   Passed    0.19 sec
+      Start 158: abi_moonlab_export
+32/32 Test #158: abi_moonlab_export ....................   Passed    0.34 sec
+
+100% tests passed out of 32
+
+Label Time Summary:
+abi     =   0.46 sec*proc (2 tests)
+core    =   3.34 sec*proc (26 tests)
+gpu     =   1.50 sec*proc (6 tests)
+
+Total Test time (real) =   5.05 sec

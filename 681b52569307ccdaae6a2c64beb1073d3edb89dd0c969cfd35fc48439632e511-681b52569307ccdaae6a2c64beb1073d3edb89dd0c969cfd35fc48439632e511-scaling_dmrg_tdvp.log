@@ -1,0 +1,10 @@
+=== scaling_dmrg_tdvp: DMRG vs ED (n=8,10,12) ===
+=== scaling_dmrg_tdvp: TDVP imag-time vs ED (n=8) ===
+=== scaling_dmrg_tdvp: TDVP real-time vs Krylov ===
+
+=== scaling_dmrg_tdvp summary ===
+checks passed    : 18
+KNOWN divergences: 0 (no quarantine)
+NEW   divergences: 0
+RESULT: PASS
+SCALING_RESULT dmrg_tdvp new=0 known=0
