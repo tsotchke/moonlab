@@ -168,6 +168,15 @@ def _copy_exact(source: Path, destination: Path, expected_size: int, expected_di
         temporary.unlink(missing_ok=True)
 
 
+def _candidate_basename(relative: str, digest: str) -> str:
+    """Return the downloaded basename, allowing only certificate hash prefixes."""
+    basename = PurePosixPath(relative).name
+    prefix = f"{digest}-"
+    if basename.startswith(prefix):
+        return basename[len(prefix):]
+    return basename
+
+
 def materialize(certificate: Path, roots: list[Path]) -> list[Path]:
     if certificate.is_symlink():
         raise MaterializationError(f"certificate must be a real file: {certificate}")
@@ -189,6 +198,8 @@ def materialize(certificate: Path, roots: list[Path]) -> list[Path]:
         if destination.exists() or destination.is_symlink():
             raise MaterializationError(f"rehydratable binding is unexpectedly present in thin evidence: {relative}")
         candidates = by_name.get(PurePosixPath(relative).name, [])
+        if not candidates:
+            candidates = by_name.get(_candidate_basename(relative, digest), [])
         if len(candidates) != 1:
             raise MaterializationError(
                 f"candidate evidence basename is ambiguous or missing for {relative}: {candidates}"

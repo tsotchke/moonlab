@@ -117,6 +117,96 @@ class ReleaseEvidenceTests(unittest.TestCase):
             (self.bundle / relative).unlink(missing_ok=True)
         self.assertEqual(len(materialize(certificate, [source])), 35)
 
+    def test_materializer_accepts_declared_sha256_prefixed_basename(self) -> None:
+        document = self._certificate_document()
+        digest = document["release_artifacts"][0]["file"]["sha256"]
+        document["release_artifacts"][0]["file"]["path"] = f"{digest}-artifact-0.bin"
+        certificate = self.bundle / CERTIFICATE
+        certificate.write_text(json.dumps(document), encoding="utf-8")
+        source = self.repo / "downloaded"
+        source.mkdir()
+        for relative in rehydratable_bindings(document):
+            (source / Path(relative).name.removeprefix(f"{digest}-")).write_bytes(b"data")
+            (self.bundle / relative).unlink(missing_ok=True)
+        self.assertEqual(len(materialize(certificate, [source])), 35)
+        self.assertEqual((source / "artifact-0.bin").read_bytes(), b"data")
+        self.assertEqual((self.bundle / f"{digest}-artifact-0.bin").read_bytes(), b"data")
+
+    def test_materializer_prefers_existing_exact_prefixed_source(self) -> None:
+        document = self._certificate_document()
+        digest = document["release_artifacts"][0]["file"]["sha256"]
+        document["release_artifacts"][0]["file"]["path"] = f"{digest}-artifact-0.bin"
+        certificate = self.bundle / CERTIFICATE
+        certificate.write_text(json.dumps(document), encoding="utf-8")
+        source = self.repo / "downloaded"
+        source.mkdir()
+        for relative in rehydratable_bindings(document):
+            (source / Path(relative).name).write_bytes(b"data")
+            (self.bundle / relative).unlink(missing_ok=True)
+        (source / "artifact-0.bin").write_bytes(b"bad!")
+        self.assertEqual(len(materialize(certificate, [source])), 35)
+
+    def test_materializer_does_not_accept_wrong_hash_prefix(self) -> None:
+        document = self._certificate_document()
+        digest = document["release_artifacts"][0]["file"]["sha256"]
+        wrong = ("0" if digest[0] != "0" else "1") + digest[1:]
+        document["release_artifacts"][0]["file"]["path"] = f"{wrong}-artifact-0.bin"
+        certificate = self.bundle / CERTIFICATE
+        certificate.write_text(json.dumps(document), encoding="utf-8")
+        source = self.repo / "downloaded"
+        source.mkdir()
+        for relative in rehydratable_bindings(document):
+            (source / Path(relative).name.removeprefix(f"{wrong}-")).write_bytes(b"data")
+            (self.bundle / relative).unlink(missing_ok=True)
+        with self.assertRaisesRegex(MaterializationError, "ambiguous or missing"):
+            materialize(certificate, [source])
+
+    def test_materializer_rejects_wrong_bytes_with_prefixed_basename(self) -> None:
+        document = self._certificate_document()
+        digest = document["release_artifacts"][0]["file"]["sha256"]
+        document["release_artifacts"][0]["file"]["path"] = f"{digest}-artifact-0.bin"
+        certificate = self.bundle / CERTIFICATE
+        certificate.write_text(json.dumps(document), encoding="utf-8")
+        source = self.repo / "downloaded"
+        source.mkdir()
+        for relative in rehydratable_bindings(document):
+            name = Path(relative).name.removeprefix(f"{digest}-")
+            (source / name).write_bytes(b"bad!" if name == "artifact-0.bin" else b"data")
+            (self.bundle / relative).unlink(missing_ok=True)
+        with self.assertRaisesRegex(MaterializationError, "exact binding"):
+            materialize(certificate, [source])
+
+    def test_materializer_rejects_ambiguous_original_basename(self) -> None:
+        document = self._certificate_document()
+        digest = document["release_artifacts"][0]["file"]["sha256"]
+        document["release_artifacts"][0]["file"]["path"] = f"{digest}-artifact-0.bin"
+        certificate = self.bundle / CERTIFICATE
+        certificate.write_text(json.dumps(document), encoding="utf-8")
+        source = self.repo / "downloaded"
+        duplicate = source / "duplicate"
+        source.mkdir()
+        duplicate.mkdir()
+        for relative in rehydratable_bindings(document):
+            name = Path(relative).name.removeprefix(f"{digest}-")
+            (source / name).write_bytes(b"data")
+            (self.bundle / relative).unlink(missing_ok=True)
+        (duplicate / "artifact-0.bin").write_bytes(b"data")
+        with self.assertRaisesRegex(MaterializationError, "ambiguous"):
+            materialize(certificate, [source])
+
+    def test_materializer_populates_an_empty_thin_target(self) -> None:
+        certificate = self.bundle / CERTIFICATE
+        document = self._certificate_document()
+        certificate.write_text(json.dumps(document), encoding="utf-8")
+        source = self.repo / "downloaded"
+        source.mkdir()
+        for relative in rehydratable_bindings(document):
+            (source / Path(relative).name).write_bytes(b"data")
+            (self.bundle / relative).unlink(missing_ok=True)
+        self.assertFalse((self.bundle / "artifact-0.bin").exists())
+        materialize(certificate, [source])
+        self.assertEqual((self.bundle / "artifact-0.bin").read_bytes(), b"data")
+
     def test_materializer_rejects_duplicate_basename_sources(self) -> None:
         certificate = self.bundle / CERTIFICATE
         document = self._certificate_document()
