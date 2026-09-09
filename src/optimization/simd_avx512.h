@@ -50,6 +50,8 @@ typedef double _Complex complex_t;
 // AVX-512 CAPABILITY CHECK
 // ============================================================================
 
+/* These probes are implemented in the baseline-compiled dispatch TU. */
+
 /**
  * @brief Check if AVX-512 is available at runtime
  *

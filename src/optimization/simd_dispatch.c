@@ -227,7 +227,8 @@ static void detect_x86_capabilities(simd_info_t* info) {
     }
 
     // Determine SIMD level
-    if (info->has_avx512f) {
+    if (info->has_avx512f && info->has_avx512dq &&
+        info->has_avx512bw && info->has_avx512vl) {
         info->level = SIMD_LEVEL_AVX512;
     } else if (info->has_avx2 && info->has_fma) {
         info->level = SIMD_LEVEL_AVX2;
@@ -438,7 +439,8 @@ const simd_info_t* simd_detect_capabilities_full(void) {
     size_t remaining = sizeof(g_capability_string);
 
 #ifdef SIMD_ARCH_X86
-    if (g_simd_info.has_avx512f) {
+    if (g_simd_info.has_avx512f && g_simd_info.has_avx512dq &&
+        g_simd_info.has_avx512bw && g_simd_info.has_avx512vl) {
         int written = snprintf(p, remaining, "AVX-512");
         p += written; remaining -= written;
 
@@ -523,14 +525,43 @@ const simd_info_t* simd_detect_capabilities_full(void) {
  */
 int avx512_is_available(void) {
 #ifdef HAS_AVX512
-    const simd_info_t* info = simd_detect_capabilities_full();
-    return info->has_avx512f &&
-           info->has_avx512dq &&
-           info->has_avx512bw &&
-           info->has_avx512vl;
+    return simd_runtime_has_avx512();
 #else
     return 0;
 #endif
+}
+
+int simd_runtime_has_avx512(void) {
+    const char *force_baseline = getenv("MOONLAB_SIMD_FORCE_BASELINE");
+    if (force_baseline &&
+        (strcmp(force_baseline, "1") == 0 ||
+         strcmp(force_baseline, "true") == 0 ||
+         strcmp(force_baseline, "yes") == 0)) {
+        return 0;
+    }
+#ifdef SIMD_ARCH_X86
+    const simd_info_t *info = simd_detect_capabilities_full();
+    return info->has_avx512f && info->has_avx512dq &&
+           info->has_avx512bw && info->has_avx512vl;
+#else
+    return 0;
+#endif
+}
+
+const char *avx512_get_features(void) {
+    if (!avx512_is_available()) return "AVX-512 unavailable";
+    const simd_info_t *info = simd_detect_capabilities_full();
+    static _Thread_local char features[128];
+    int written = snprintf(features, sizeof(features), "AVX-512 F DQ BW VL");
+    size_t used = written > 0 ? (size_t)written : 0;
+    if (used >= sizeof(features)) used = sizeof(features) - 1;
+    if (info->has_avx512cd && used < sizeof(features)) {
+        written = snprintf(features + used, sizeof(features) - used, " CD");
+        if (written > 0) used += (size_t)written;
+    }
+    if (info->has_avx512vnni && used < sizeof(features))
+        (void)snprintf(features + used, sizeof(features) - used, " VNNI");
+    return features;
 }
 
 // ============================================================================
@@ -567,7 +598,7 @@ simd_backend_t simd_get_backend(simd_operation_t op) {
     (void)info;  /* Unused on Apple Silicon where Accelerate is always preferred. */
 
 #ifdef SIMD_ARCH_X86
-    if (info->has_avx512f) return SIMD_BACKEND_AVX512;
+    if (simd_runtime_has_avx512()) return SIMD_BACKEND_AVX512;
     if (info->has_avx2)    return SIMD_BACKEND_AVX2;
     if (info->has_avx)     return SIMD_BACKEND_AVX;
     if (info->has_sse2)    return SIMD_BACKEND_SSE2;
@@ -611,7 +642,7 @@ size_t simd_get_vector_width(void) {
     const simd_info_t* info = simd_detect_capabilities_full();
 
 #ifdef SIMD_ARCH_X86
-    if (info->has_avx512f) return 64;  // 512 bits = 64 bytes
+    if (simd_runtime_has_avx512()) return 64;  // 512 bits = 64 bytes
     if (info->has_avx)     return 32;  // 256 bits = 32 bytes
     if (info->has_sse2)    return 16;  // 128 bits = 16 bytes
     return 8;  // 64-bit scalar
@@ -644,7 +675,7 @@ size_t simd_get_unroll_factor(void) {
     const simd_info_t* info = simd_detect_capabilities_full();
 
 #ifdef SIMD_ARCH_X86
-    if (info->has_avx512f) return 8;  // 8 doubles per register, unroll 2x
+    if (simd_runtime_has_avx512()) return 8;  // 8 doubles per register, unroll 2x
     if (info->has_avx)     return 4;
     return 4;
 #elif defined(SIMD_ARCH_ARM64)

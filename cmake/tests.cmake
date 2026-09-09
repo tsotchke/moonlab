@@ -118,6 +118,21 @@
     endif()
     add_test(NAME unit_simd_dispatch COMMAND test_simd_dispatch)
 
+    add_executable(test_simd_dispatch_portability
+                   tests/unit/test_simd_dispatch_portability.c)
+    if(QSIM_SIMD_AVX512)
+        target_compile_definitions(test_simd_dispatch_portability PRIVATE HAS_AVX512=1)
+    endif()
+    if(QSIM_HIDDEN_VISIBILITY AND QSIM_BUILD_SHARED)
+        target_sources(test_simd_dispatch_portability PRIVATE
+                       src/optimization/simd_dispatch.c)
+    endif()
+    target_link_libraries(test_simd_dispatch_portability PRIVATE quantumsim)
+    add_test(NAME unit_simd_dispatch_portability
+             COMMAND test_simd_dispatch_portability)
+    set_tests_properties(unit_simd_dispatch_portability PROPERTIES
+        ENVIRONMENT "MOONLAB_SIMD_FORCE_BASELINE=1")
+
     # Tensor-network unit test — the 800+ line suite that exercises
     # tensors, SVD, MPS, gate application via tensor networks,
     # measurement, and entanglement. Already in-tree but historically

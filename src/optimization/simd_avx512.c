@@ -18,9 +18,7 @@
  */
 
 #include "simd_avx512.h"
-#include <stdio.h>   /* snprintf used in the APPEND_FEATURE macro below */
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 
 // ============================================================================
@@ -30,43 +28,6 @@
 #if AVX512_AVAILABLE
 
 #include <immintrin.h>
-
-const char* avx512_get_features(void) {
-    static char features[128] = "AVX-512";
-    static int initialized = 0;
-
-    if (!initialized) {
-        size_t pos = strlen(features);
-        const size_t cap = sizeof(features);
-        #define APPEND_FEATURE(tag) \
-            do { \
-                int _n = snprintf(features + pos, cap - pos, " %s", (tag)); \
-                if (_n > 0 && (size_t)_n < cap - pos) pos += (size_t)_n; \
-            } while (0)
-#ifdef __AVX512F__
-        APPEND_FEATURE("F");
-#endif
-#ifdef __AVX512DQ__
-        APPEND_FEATURE("DQ");
-#endif
-#ifdef __AVX512BW__
-        APPEND_FEATURE("BW");
-#endif
-#ifdef __AVX512VL__
-        APPEND_FEATURE("VL");
-#endif
-#ifdef __AVX512CD__
-        APPEND_FEATURE("CD");
-#endif
-#ifdef __AVX512VNNI__
-        APPEND_FEATURE("VNNI");
-#endif
-        #undef APPEND_FEATURE
-        initialized = 1;
-    }
-
-    return features;
-}
 
 // ============================================================================
 // SUM OF SQUARED MAGNITUDES
@@ -439,10 +400,6 @@ void avx512_xor_bytes(uint8_t* dest, const uint8_t* src, size_t n) {
 // ============================================================================
 // FALLBACK IMPLEMENTATIONS (When AVX-512 not available at compile time)
 // ============================================================================
-
-const char* avx512_get_features(void) {
-    return "AVX-512 not available";
-}
 
 double avx512_sum_squared_magnitudes(const complex_t* amplitudes, size_t n) {
     if (!amplitudes || n == 0) return 0.0;
