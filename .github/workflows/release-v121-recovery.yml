@@ -327,6 +327,7 @@ jobs:
     - name: Create fully populated draft release
       uses: softprops/action-gh-release@v3
       with:
+        tag_name: v1.2.1
         name: Moonlab v1.2.1
         draft: true
         prerelease: ${{ needs.preflight.outputs.prerelease == 'true' }}

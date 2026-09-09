@@ -62,6 +62,12 @@ class RecoveryWorkflowTests(unittest.TestCase):
         self.assertNotIn("cargo package", text)
         self.assertNotIn("cmake --build", text)
 
+    def test_manual_dispatch_draft_targets_existing_release_tag(self) -> None:
+        steps = self.document["jobs"]["draft-release"]["steps"]
+        draft = next(step for step in steps if step.get("uses", "").startswith("softprops/action-gh-release@"))
+        self.assertEqual(draft["with"]["tag_name"], "v1.2.1")
+        self.assertTrue(draft["with"]["draft"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
