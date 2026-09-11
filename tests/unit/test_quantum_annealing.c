@@ -9,6 +9,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef M_PI
@@ -284,14 +285,252 @@ static void test_validation(void)
           MOONLAB_ANNEAL_SCHEDULE_ERROR, "invalid schedule has distinct status");
 }
 
+static void test_piecewise_pause_and_quench_schedule(void)
+{
+    /* 1. Pause schedule helper validation */
+    moonlab_anneal_schedule_point_t pause_pts[4];
+    CHECK(moonlab_anneal_schedule_make_pause(0.5, 0.3, 0.2, pause_pts) == MOONLAB_ANNEAL_OK,
+          "pause schedule created");
+    CHECK(fabs(pause_pts[0].t) < 1e-12 && fabs(pause_pts[0].s) < 1e-12, "pause pt 0");
+    CHECK(fabs(pause_pts[1].t - 0.3) < 1e-12 && fabs(pause_pts[1].s - 0.5) < 1e-12, "pause pt 1");
+    CHECK(fabs(pause_pts[2].t - 0.5) < 1e-12 && fabs(pause_pts[2].s - 0.5) < 1e-12, "pause pt 2");
+    CHECK(fabs(pause_pts[3].t - 1.0) < 1e-12 && fabs(pause_pts[3].s - 1.0) < 1e-12, "pause pt 3");
+
+    /* Out of bounds pause parameters */
+    CHECK(moonlab_anneal_schedule_make_pause(0.5, 0.8, 0.3, pause_pts) == MOONLAB_ANNEAL_BAD_ARG,
+          "pause schedule rejects sum > 1.0");
+
+    /* 2. Quench schedule helper validation */
+    moonlab_anneal_schedule_point_t quench_pts[3];
+    CHECK(moonlab_anneal_schedule_make_quench(0.7, 0.6, quench_pts) == MOONLAB_ANNEAL_OK,
+          "quench schedule created");
+    CHECK(fabs(quench_pts[0].t) < 1e-12 && fabs(quench_pts[0].s) < 1e-12, "quench pt 0");
+    CHECK(fabs(quench_pts[1].t - 0.6) < 1e-12 &&
+          fabs(quench_pts[1].s - 0.7) < 1e-12, "quench pt 1");
+    CHECK(fabs(quench_pts[2].t - 1.0) < 1e-12 &&
+          fabs(quench_pts[2].s - 1.0) < 1e-12, "quench pt 2");
+
+    CHECK(moonlab_anneal_schedule_make_quench(0.7, 1.0, quench_pts) == MOONLAB_ANNEAL_BAD_ARG,
+          "quench rejects start >= 1.0");
+
+    /* 3. Execute evolution under piecewise schedule */
+    const double h[1] = {-1.0}, J[1] = {0.0};
+    moonlab_anneal_config_t c = test_config(UINT64_C(0x1234567890abcdef));
+    c.schedule = MOONLAB_ANNEAL_SCHEDULE_PIECEWISE;
+    c.schedule_points = pause_pts;
+    c.num_schedule_points = 4;
+    moonlab_anneal_result_t *r = NULL;
+    CHECK(moonlab_quantum_anneal_ising(1, h, J, 0.0, &c, &r) == MOONLAB_ANNEAL_OK && r,
+          "piecewise pause anneal succeeds");
+    if (r) {
+        CHECK(moonlab_anneal_result_success_probability(r) > 0.90,
+              "piecewise pause reaches ground state");
+        CHECK(fabs(moonlab_anneal_result_final_norm(r) - 1.0) < 1e-10,
+              "piecewise pause preserves norm");
+    }
+    moonlab_anneal_result_free(r);
+}
+
+static void test_reverse_annealing_ising(void)
+{
+    /* 2 qubits with ferromagnetic coupling J_01 = -1.0 */
+    const double h[2] = {0.0, 0.0};
+    const double J[4] = {0.0, -1.0, -1.0, 0.0};
+    moonlab_anneal_config_t c = test_config(UINT64_C(0xfeedfacecafebeef));
+    c.total_time = 15.0;
+    c.num_steps = 1500;
+    moonlab_anneal_result_t *r = NULL;
+
+    /* Start from state |00> (initial_bitstring = 0) */
+    CHECK(moonlab_quantum_reverse_anneal_ising(
+              2, h, J, 0.0, 0, 0.35, 0.2, &c, &r) == MOONLAB_ANNEAL_OK && r,
+          "reverse annealing ising succeeds");
+    if (r) {
+        CHECK(fabs(moonlab_anneal_result_best_energy(r) - (-1.0)) < 1e-10,
+              "reverse annealing finds ferromagnetic ground state");
+        CHECK(fabs(moonlab_anneal_result_final_norm(r) - 1.0) < 1e-10,
+              "reverse annealing preserves state norm");
+    }
+    moonlab_anneal_result_free(r);
+
+    /* Test QUBO reverse annealing */
+    const double Q[4] = {-1.0, 0.0, 0.0, -1.0};
+    r = NULL;
+    CHECK(moonlab_quantum_reverse_anneal_qubo(
+              2, Q, 0.0, 0b11, 0.4, 0.1, &c, &r) == MOONLAB_ANNEAL_OK && r,
+          "reverse annealing qubo succeeds");
+    if (r) {
+        CHECK(fabs(moonlab_anneal_result_final_norm(r) - 1.0) < 1e-10,
+              "reverse annealing qubo preserves norm");
+    }
+    moonlab_anneal_result_free(r);
+
+    /* Test validation */
+    r = NULL;
+    CHECK(moonlab_quantum_reverse_anneal_ising(
+              2, h, J, 0.0, 0, 1.5, 0.2, &c, &r) == MOONLAB_ANNEAL_BAD_ARG && !r,
+          "reverse annealing rejects invalid s_target");
+}
+
+static void test_per_qubit_anneal_offsets(void)
+{
+    const double h[2] = {-0.5, 0.5};
+    const double J[4] = {0.0, -0.2, -0.2, 0.0};
+    const double offsets[2] = {0.05, -0.05};
+    moonlab_anneal_config_t c = test_config(UINT64_C(0x1122334455667788));
+    c.anneal_offsets = offsets;
+    moonlab_anneal_result_t *r = NULL;
+
+    CHECK(moonlab_quantum_anneal_ising(2, h, J, 0.0, &c, &r) == MOONLAB_ANNEAL_OK && r,
+          "per-qubit offsets anneal succeeds");
+    if (r) {
+        CHECK(fabs(moonlab_anneal_result_final_norm(r) - 1.0) < 1e-10,
+              "offsets anneal preserves norm");
+    }
+    moonlab_anneal_result_free(r);
+
+    /* Invalid offset out of [-1, 1] */
+    const double bad_offsets[2] = {1.5, 0.0};
+    c.anneal_offsets = bad_offsets;
+    r = NULL;
+    CHECK(moonlab_quantum_anneal_ising(2, h, J, 0.0, &c, &r) == MOONLAB_ANNEAL_BAD_ARG && !r,
+          "invalid offset rejected");
+}
+
+static void test_zephyr_graph_and_clique_embedding(void)
+{
+    /* 1. Zephyr graph creation and properties */
+    moonlab_zephyr_graph_t *z1 = moonlab_zephyr_graph_create(1);
+    CHECK(z1 != NULL, "zephyr graph m=1 created");
+    if (z1) {
+        CHECK(z1->num_qubits == 48, "zephyr m=1 qubit count N=48");
+        CHECK(z1->num_couplers == 280, "zephyr m=1 has exactly 280 couplers");
+        CHECK(moonlab_zephyr_has_coupler(z1, 999, 999) == 0,
+              "out of bounds coupler query returns 0");
+    }
+
+    moonlab_zephyr_graph_t *z2 = moonlab_zephyr_graph_create(2);
+    CHECK(z2 != NULL, "zephyr graph m=2 created");
+    if (z2) {
+        CHECK(z2->num_qubits == 160, "zephyr m=2 qubit count N=160");
+        CHECK(z2->num_couplers == 1224, "zephyr m=2 has exactly 1224 couplers");
+    }
+
+    /* 2. Clique embedding into Zephyr Z_1 */
+    moonlab_zephyr_embedding_t *emb = moonlab_zephyr_find_clique_embedding(4, 1);
+    CHECK(emb != NULL, "K_4 clique embedding created");
+    if (emb && z1) {
+        CHECK(emb->num_logical == 4, "embedding logical count");
+        for (size_t i = 0; i < 4; i++) {
+            CHECK(emb->chain_lengths[i] == 2, "chain length is 2 for K_4");
+        }
+
+        /* 3. Embed Ising problem */
+        const double log_h[4] = {0.2, -0.3, 0.1, -0.4};
+        const double log_J[16] = {
+             0.0, -0.5, -0.3, -0.2,
+            -0.5,  0.0, -0.4, -0.1,
+            -0.3, -0.4,  0.0, -0.6,
+            -0.2, -0.1, -0.6,  0.0
+        };
+        double *phys_h = calloc(z1->num_qubits, sizeof(double));
+        double *phys_J = calloc(z1->num_qubits * z1->num_qubits, sizeof(double));
+        CHECK(phys_h && phys_J, "physical arrays allocated");
+
+        int rc = moonlab_zephyr_embed_ising(z1, emb, log_h, log_J, 2.5, phys_h, phys_J);
+        CHECK(rc == MOONLAB_ANNEAL_OK, "zephyr embed ising succeeds");
+
+        /* 4. Unembed samples */
+        uint64_t phys_samples[3] = {0, 0, 0};
+        /* Sample 0: all physical qubits 0 -> logical 0 */
+        phys_samples[0] = 0;
+        /* Sample 1: all chain qubits 1 -> logical 0b1111 = 15 */
+        for (size_t i = 0; i < 4; i++) {
+            for (size_t c = 0; c < emb->chain_lengths[i]; c++) {
+                phys_samples[1] |= (UINT64_C(1) << emb->chains[i][c]);
+            }
+        }
+        /* Sample 2: break chain 0 (set first qubit to 1, second to 0) */
+        phys_samples[2] = (UINT64_C(1) << emb->chains[0][0]);
+
+        uint64_t log_samples[3] = {0};
+        double break_fracs[3] = {0.0};
+        rc = moonlab_zephyr_unembed_samples(emb, 3, phys_samples, log_samples, break_fracs);
+        CHECK(rc == MOONLAB_ANNEAL_OK, "zephyr unembed samples succeeds");
+        CHECK(log_samples[0] == 0, "sample 0 decoded to 0");
+        CHECK(fabs(break_fracs[0]) < 1e-12, "sample 0 zero chain breaks");
+        CHECK(log_samples[1] == 15, "sample 1 decoded to 15");
+        CHECK(fabs(break_fracs[1]) < 1e-12, "sample 1 zero chain breaks");
+        CHECK(fabs(break_fracs[2] - 0.25) < 1e-12, "sample 2 detected broken chain fraction 0.25");
+
+        free(phys_h);
+        free(phys_J);
+    }
+
+    /* 5. Multi-tile clique embeddings into Zephyr Z_2 */
+    if (z2) {
+        moonlab_zephyr_embedding_t *emb_k8 = moonlab_zephyr_find_clique_embedding(8, 2);
+        CHECK(emb_k8 != NULL, "K_8 clique embedding on Z_2 created");
+        if (emb_k8) {
+            CHECK(emb_k8->num_logical == 8, "K_8 logical count is 8");
+            double *phys_h8 = calloc(z2->num_qubits, sizeof(double));
+            double *phys_J8 = calloc(z2->num_qubits * z2->num_qubits, sizeof(double));
+            double log_h8[8] = {0};
+            double log_J8[64] = {0};
+            for (size_t i = 0; i < 8; i++) {
+                for (size_t j = i + 1; j < 8; j++) {
+                    log_J8[i * 8 + j] = -0.5;
+                    log_J8[j * 8 + i] = -0.5;
+                }
+            }
+            int rc8 = moonlab_zephyr_embed_ising(z2, emb_k8, log_h8, log_J8, 2.0, phys_h8, phys_J8);
+            CHECK(rc8 == MOONLAB_ANNEAL_OK, "K_8 embedding into Z_2 physical couplers succeeds");
+            free(phys_h8);
+            free(phys_J8);
+            moonlab_zephyr_embedding_free(emb_k8);
+        }
+
+        moonlab_zephyr_embedding_t *emb_k12 = moonlab_zephyr_find_clique_embedding(12, 2);
+        CHECK(emb_k12 != NULL, "K_12 multi-tile clique embedding on Z_2 created");
+        if (emb_k12) {
+            CHECK(emb_k12->num_logical == 12, "K_12 logical count is 12");
+            double *phys_h12 = calloc(z2->num_qubits, sizeof(double));
+            double *phys_J12 = calloc(z2->num_qubits * z2->num_qubits, sizeof(double));
+            double log_h12[12] = {0};
+            double log_J12[144] = {0};
+            for (size_t i = 0; i < 12; i++) {
+                for (size_t j = i + 1; j < 12; j++) {
+                    log_J12[i * 12 + j] = -0.25;
+                    log_J12[j * 12 + i] = -0.25;
+                }
+            }
+            int rc12 = moonlab_zephyr_embed_ising(
+                z2, emb_k12, log_h12, log_J12, 2.0, phys_h12, phys_J12);
+            CHECK(rc12 == MOONLAB_ANNEAL_OK, "K_12 embedding into Z_2 physical couplers succeeds");
+            free(phys_h12);
+            free(phys_J12);
+            moonlab_zephyr_embedding_free(emb_k12);
+        }
+    }
+
+    moonlab_zephyr_embedding_free(emb);
+    moonlab_zephyr_graph_free(z1);
+    moonlab_zephyr_graph_free(z2);
+}
+
 int main(void)
 {
+    fprintf(stdout, "=== Quantum Annealing Trotter & Zephyr Tests ===\n");
     test_schedules();
     test_qubo_conversion();
     test_one_qubit_oracle();
     test_qubo_and_seed_replay();
     test_all_schedule_evolution_and_assigned_seed();
+    test_piecewise_pause_and_quench_schedule();
+    test_reverse_annealing_ising();
+    test_per_qubit_anneal_offsets();
+    test_zephyr_graph_and_clique_embedding();
     test_validation();
-    if (failures) fprintf(stderr, "%d quantum-annealing failure(s)\n", failures);
-    return failures ? 1 : 0;
+    fprintf(stdout, "=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");
+    return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

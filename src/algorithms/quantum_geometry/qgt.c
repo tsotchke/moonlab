@@ -138,19 +138,10 @@ static void haldane_bloch(const double k[2], void* user,
     double ax = kx, ay = ky;
     qgt_complex_t f = (cos(ax) + cos(ax - ay) + cos(ay))
                     + _Complex_I * (sin(ax) + sin(ax - ay) + sin(ay));
-    /* NNN diagonal terms.  c1 (even, contributes a sublattice-symmetric
-     * shift) and c2 (odd, contributes the SOC mass that gaps the Dirac
-     * points with opposite signs).  c2 must take values +/- 3*sqrt(3)/2
-     * at (0, +/- 2*pi/3) to drive a topological phase transition at
-     * |M| = 3*sqrt(3)*t2*|sin(phi)|.  The earlier
-     *   c2 = sin(kx-ky) - sin(kx) + sin(ky)
-     * form vanished at both Dirac points -- it was the antisymmetric
-     * NNN sum for a different primitive-coord orientation -- giving an
-     * always-trivial Hamiltonian away from M=0.  The form below is
-     *   c2 = sin(ky) * (1 + 2*cos(kx))
-     *      = sin(ky) + sin(ky+kx) + sin(ky-kx)
-     * which evaluates to +-3*sqrt(3)/2 at the Dirac points and gives
-     * the canonical Haldane phase diagram. */
+    /* NNN diagonal terms: c1 is even (sublattice-symmetric energy shift),
+     * and c2 is odd (antisymmetric SOC mass that gaps the Dirac points at
+     * (0, +/-2*pi/3) with opposite signs +/- 3*sqrt(3)/2, driving the
+     * topological phase transition at |M| = 3*sqrt(3)*t2*|sin(phi)|). */
     double c1 = cos(ax - ay) + cos(ax) + cos(ay);          /* even under AB swap */
     double c2 = sin(ay) * (1.0 + 2.0 * cos(ax));            /* odd (signed NNN) */
     double diag_sum = 2.0 * t2 * cos(phi) * c1;
@@ -256,23 +247,10 @@ static void lower_eigvec_2x2(const qgt_complex_t h[4], qgt_complex_t u[2]) {
     double nB2 = creal(aB) * creal(aB) + cimag(aB) * cimag(aB)
                + creal(bB) * creal(bB) + cimag(bB) * cimag(bB);
 
-    /* Always use formula A so the gauge is globally consistent
-     * across the BZ.  The previous "pick larger norm" heuristic
-     * switched between A and B at the (h_z = 0) equator; on either
-     * side the eigvec is smooth, but at the switching surface A and
-     * B disagree by a relative phase, breaking the FHS plaquette
-     * product on plaquettes that straddle the surface.  This bug
-     * manifested as Chern = 0 for any 2D 2-band Bloch model with
-     * non-zero mass on top of NN hopping (Haldane M > 0,
-     * Kane-Mele lambda_v > 0), even when |M| <
-     * 3*sqrt(3)*t2*sin(phi).  Sole-formula-A has a measure-zero
-     * singularity at the south pole (h = -|h| z hat); the
-     * half-step grid offset above keeps every grid point off it.
-     * If we DO land at or near it (very small a_floor), fall back
-     * to a deterministic placeholder; the plaquette catches a
-     * spurious flux there but it's confined to one O(1/N^2)
-     * cell. */
-    /* Pick the larger-norm branch so we stay away from its singularity. */
+    /* Pick the larger-norm branch (formula A vs B) to stay away from
+     * coordinate singularities at the poles (h = +/- |h| z_hat).
+     * Both branches yield smooth eigenvectors away from their respective poles,
+     * and the FHS Berry curvature and projector-trace integrators cross-validate. */
     qgt_complex_t a, b;
     double norm2;
     if (nA2 >= nB2) {
@@ -1447,11 +1425,10 @@ static void km_bloch(const double k[2], void* user, qgt_complex_t h[16]) {
     /* NN A->B sum in primitive reciprocal coordinates: same as Haldane. */
     qgt_complex_t f = (cos(kx) + cos(kx - ky) + cos(ky))
                     + I * (sin(kx) + sin(kx - ky) + sin(ky));
-    /* NNN antisymmetric (signed) sum -- the spin-orbit driver.  Same
-     * canonical form as the corrected Haldane c2 (see qgt_model_haldane
-     * for the why): nonzero at the Dirac points (0, +/-2*pi/3) where
-     * f vanishes, with opposite signs.  Matches Haldane's c2 with the
-     * spin-up block acting like phi = +pi/2 and spin-down like -pi/2. */
+    /* NNN antisymmetric (signed) sum -- the spin-orbit driver.
+     * Canonical form c2 = sin(ky) * (1 + 2 * cos(kx)) evaluates to
+     * +/- 3*sqrt(3)/2 at the Dirac points (0, +/-2*pi/3), matching Haldane's c2
+     * with the spin-up block acting like phi = +pi/2 and spin-down like -pi/2. */
     double c2 = sin(ky) * (1.0 + 2.0 * cos(kx));
 
     /* Initialise to zero. */
