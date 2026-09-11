@@ -21,6 +21,7 @@ pub enum AnnealSchedule {
     Linear = 0,
     Quadratic = 1,
     Cosine = 2,
+    Piecewise = 3,
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +62,13 @@ impl AnnealConfig {
             driver_strength: self.driver_strength,
             problem_strength: self.problem_strength,
             second_order: i32::from(self.second_order),
+            schedule_points: ptr::null(),
+            num_schedule_points: 0,
+            reverse_anneal: 0,
+            initial_bitstring: 0,
+            reverse_s_target: 0.0,
+            reverse_hold_fraction: 0.0,
+            anneal_offsets: ptr::null(),
         }
     }
 }
