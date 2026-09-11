@@ -22,6 +22,21 @@ const gpuSession = {
 };
 let lastGpuCircuitFailureAt = 0;
 
+// A GPU readback that executed native commands and then produced untrustworthy
+// output (invalid distribution, a failed buffer read, or a WASM trap) means we
+// can no longer trust *this* WASM module instance: WebGPU readback on this
+// build goes through an Asyncify-driven async path, and when that path is
+// abandoned mid-flight (e.g. because we already decided the result was bad and
+// moved on), the pending continuation can resume later and run against memory
+// the CPU fallback has since reused, tripping an unrelated "unreachable" trap.
+// These counters/flags survive individual module resets so a *module* can be
+// discarded and recreated per failure while the WORKER still remembers that
+// WebGPU has been unreliable this session and stops retrying it forever.
+let gpuHardDisabled = false;
+let gpuHardDisableReason = null;
+let gpuRecoveryAttempts = 0;
+const MAX_GPU_RECOVERY_ATTEMPTS = 1;
+
 const resetGpuSession = () => {
   gpuSession.initialized = false;
   gpuSession.available = false;
@@ -58,14 +73,16 @@ const isFatalWasmRuntimeError = (error) => {
   return /memory access out of bounds|runtimeerror:\s*unreachable|aborted?\(/i.test(detail);
 };
 
-const disableGpuPathForModule = (module, reason) => {
-  releaseGpuContext(module);
-  gpuSession.available = false;
-  gpuSession.initialized = true;
-  gpuSession.backendType = GPU_BACKEND_NONE;
-  gpuSession.nativeAccelerated = false;
-  gpuSession.reason = reason;
-};
+// Thrown (never silently swallowed to null) whenever a GPU readback executed
+// native commands but produced output we cannot trust -- see the
+// gpuHardDisabled comment above for why that forces a module reset rather
+// than a same-instance retry.
+class GpuReadbackFailure extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'GpuReadbackFailure';
+  }
+}
 
 const resetModuleRuntime = () => {
   releaseGpuContext(moduleInstance);
@@ -74,10 +91,73 @@ const resetModuleRuntime = () => {
   modulePromise = null;
 };
 
-const resetModuleAfterFatalGpuRuntime = (reason, error) => {
+// The single recovery path for any GPU circuit/readback failure: discard the
+// current WASM module outright (so the next getModule() call builds a fresh
+// instance for the CPU fallback to run on) and, if WebGPU keeps failing even
+// after a fresh module gets a fresh device/context, stop retrying it for the
+// rest of this worker's life.
+const recoverModuleAfterGpuFailure = (reason, error) => {
+  gpuRecoveryAttempts += 1;
+  if (gpuRecoveryAttempts > MAX_GPU_RECOVERY_ATTEMPTS) {
+    gpuHardDisabled = true;
+    gpuHardDisableReason = `disabled-after-repeated-failures:${reason}`;
+  }
+  resetModuleRuntime();
+  console.warn(
+    `[moonlab-worker] resetting wasm module after ${reason} (gpu recovery attempt ${gpuRecoveryAttempts}): ${describeError(error)}`
+  );
+  if (gpuHardDisabled) {
+    console.warn(
+      '[moonlab-worker] WebGPU path failed again after reinitialization; routing to CPU for the remainder of this session'
+    );
+  }
+};
+
+// Used when the CPU fallback itself faults on a module handed to it (e.g. a
+// module left over from an earlier failure that recoverModuleAfterGpuFailure
+// did not catch in time). Does not touch the GPU hard-disable counters --
+// this is a module-health problem, not evidence that GPU is unreliable.
+const resetModuleAfterCpuFault = (reason, error) => {
   resetModuleRuntime();
   console.warn(`[moonlab-worker] resetting wasm module after ${reason}: ${describeError(error)}`);
 };
+
+// Belt-and-braces: an abandoned WebGPU readback on this build resumes through
+// an Asyncify-driven continuation that is not tied to any promise our own
+// code awaits. When we move on after an invalid/failed readback (see
+// GpuReadbackFailure above) that continuation can still resume later, on its
+// own schedule, and trap -- as an exception that never touches any try/catch
+// in this file because nothing here is awaiting it. Left unhandled, that
+// becomes an uncaught worker error that Chromium reports all the way up to
+// the page. Catch it here and stop it from propagating.
+//
+// This only discards the module (it does not count toward the GPU
+// hard-disable threshold): a single circuit run that hits the cold-start
+// race produces both an in-call GpuReadbackFailure (handled, and counted, by
+// recoverModuleAfterGpuFailure) *and*, shortly after, this detached echo of
+// the same incident. Counting the echo again would hard-disable WebGPU for
+// the rest of the session after a single unlucky click, which would defeat
+// "keep the GPU fast path when it works" for every session that merely
+// clicked Simulate too early once.
+const handleDetachedWasmFault = (error) => {
+  if (!isFatalWasmRuntimeError(error)) return false;
+  console.warn(`[moonlab-worker] caught a detached WASM fault (likely an abandoned GPU readback): ${describeError(error)}`);
+  resetModuleAfterCpuFault('detached-wasm-fault', error);
+  return true;
+};
+
+self.addEventListener('error', (event) => {
+  const error = event.error || event.message;
+  if (handleDetachedWasmFault(error)) {
+    event.preventDefault();
+  }
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  if (handleDetachedWasmFault(event.reason)) {
+    event.preventDefault();
+  }
+});
 
 const getModule = async () => {
   if (moduleInstance) return moduleInstance;
@@ -117,8 +197,19 @@ const createState = (module, numQubits) => {
 
 const freeState = (module, statePtr) => {
   if (!statePtr) return;
-  module._quantum_state_free(statePtr);
-  module._free(statePtr);
+  // If the module is already in a broken state (e.g. we are unwinding after
+  // a trap), cleanup itself may throw. Never let a cleanup failure mask the
+  // real error that is already propagating.
+  try {
+    module._quantum_state_free(statePtr);
+  } catch (_err) {
+    // Nothing to salvage; the module is being discarded regardless.
+  }
+  try {
+    module._free(statePtr);
+  } catch (_err) {
+    // Ditto.
+  }
 };
 
 const setAmplitudes = (module, statePtr, amplitudes) => {
@@ -345,6 +436,14 @@ const hasUnifiedGpuApi = (module) =>
 const ensureGpuSession = (module) => {
   if (gpuSession.initialized) return gpuSession;
   gpuSession.initialized = true;
+
+  if (gpuHardDisabled) {
+    // WebGPU already proved unreliable this session (repeated invalid
+    // readbacks/traps survived a module reset). Do not probe it again on
+    // every fresh module -- route straight to CPU from here on.
+    gpuSession.reason = gpuHardDisableReason || 'gpu-hard-disabled';
+    return gpuSession;
+  }
 
   if (!hasUnifiedGpuApi(module)) {
     gpuSession.reason = 'unified-gpu-api-unavailable';
@@ -704,8 +803,7 @@ const applyGate = (module, statePtr, gate, warnings) => {
   }
 };
 
-const runCircuitCpu = async (payload) => {
-  const module = await getModule();
+const runCircuitCpuOnce = (module, payload) => {
   const warnings = [];
   const numQubits = payload.numQubits;
   const gates = payload.gates || [];
@@ -719,6 +817,24 @@ const runCircuitCpu = async (payload) => {
     return { probabilities, warnings, backend: 'cpu', nativeAccelerated: false };
   } finally {
     freeState(module, statePtr);
+  }
+};
+
+// The CPU path is the last line of defense, so it must not simply trust
+// whatever module instance it is handed: if the module turns out to be
+// partially initialized or otherwise broken (a WASM trap on the very first
+// call into it), reset it once and retry on a guaranteed-fresh instance
+// before giving up. A non-WASM-runtime error (e.g. a bad payload) is not
+// retried -- it will fail the same way on a fresh module too.
+const runCircuitCpu = async (payload) => {
+  let module = await getModule();
+  try {
+    return runCircuitCpuOnce(module, payload);
+  } catch (err) {
+    if (!isFatalWasmRuntimeError(err)) throw err;
+    resetModuleAfterCpuFault('runCircuitCpu', err);
+    module = await getModule();
+    return runCircuitCpuOnce(module, payload);
   }
 };
 
@@ -754,39 +870,32 @@ const runCircuitGpu = (module, payload) => {
   try {
     for (const gate of gates) {
       const rc = gpuApplyGate(module, session.ctxPtr, amplitudesBuffer, gate, dim);
-      if (rc === null) {
-        return null;
-      }
-      if (rc !== 0) {
+      if (rc === null || rc !== 0) {
+        // The GPU declined this gate cleanly (unsupported op / bad rc) before
+        // any readback was attempted -- nothing untrustworthy has happened
+        // yet, so a plain CPU fallback on the same module is safe.
         return null;
       }
     }
 
+    // From here on we perform a buffer readback. On this build that goes
+    // through an Asyncify-driven async path; a failure or invalid result at
+    // this point means the module's state can no longer be trusted for a
+    // same-instance CPU fallback (see the gpuHardDisabled comment above), so
+    // every failure past this point throws instead of returning null.
     let probabilities;
     try {
       probabilities = gpuComputeProbabilities(module, session.ctxPtr, amplitudesBuffer, dim);
     } catch (err) {
-      noteGpuProbabilityFailure(`runCircuit exception: ${err instanceof Error ? err.message : String(err)}`);
-      // A thrown error out of the WASM probability kernel can leave the
-      // shared linear memory corrupted (observed: a later, unrelated CPU
-      // fallback call traps with "unreachable" against the same heap).
-      // Discard the whole module instance so the CPU fallback below runs
-      // against a guaranteed-clean heap instead of a possibly-poisoned one.
-      resetModuleAfterFatalGpuRuntime('runCircuit gpu probability exception', err);
-      return null;
+      const message = `runCircuit exception: ${describeError(err)}`;
+      noteGpuProbabilityFailure(message);
+      throw new GpuReadbackFailure(message);
     }
     const validation = isProbabilityDistributionValid(probabilities, expectedMass);
     if (!validation.ok) {
-      const validationError = new Error(
-        `runCircuit invalid output (sum=${validation.total.toExponential(3)}, max=${validation.max.toExponential(3)})`
-      );
-      noteGpuProbabilityFailure(validationError.message);
-      // Same rationale as above: an invalid (all-zero/garbage) distribution
-      // from the GPU kernel has been observed to precede a heap-corruption
-      // trap in the very next CPU-path call on this module instance. Reset
-      // proactively rather than let the CPU fallback inherit a poisoned heap.
-      resetModuleAfterFatalGpuRuntime('runCircuit gpu invalid probability output', validationError);
-      return null;
+      const message = `runCircuit invalid output (sum=${validation.total.toExponential(3)}, max=${validation.max.toExponential(3)})`;
+      noteGpuProbabilityFailure(message);
+      throw new GpuReadbackFailure(message);
     }
     return {
       probabilities,
@@ -795,7 +904,11 @@ const runCircuitGpu = (module, payload) => {
       nativeAccelerated: session.nativeAccelerated,
     };
   } finally {
-    module._gpu_buffer_free(amplitudesBuffer);
+    try {
+      module._gpu_buffer_free(amplitudesBuffer);
+    } catch (_err) {
+      // The module may already be unsafe/about to be discarded; ignore.
+    }
   }
 };
 
@@ -811,17 +924,12 @@ const runCircuit = async (payload) => {
     }
   } catch (err) {
     noteGpuCircuitFailure(describeError(err));
-    if (isFatalWasmRuntimeError(err)) {
-      resetModuleAfterFatalGpuRuntime('runCircuit', err);
-    } else {
-      disableGpuPathForModule(module, 'disabled-after-runCircuit-error');
-    }
+    recoverModuleAfterGpuFailure('runCircuit', err);
   }
   return runCircuitCpu(payload);
 };
 
-const probabilitiesFromAmplitudesCpu = async (payload) => {
-  const module = await getModule();
+const probabilitiesFromAmplitudesCpuOnce = (module, payload) => {
   const numQubits = payload.numQubits;
   const amplitudes = payload.amplitudes;
   const statePtr = createState(module, numQubits);
@@ -831,6 +939,19 @@ const probabilitiesFromAmplitudesCpu = async (payload) => {
     return { probabilities: getProbabilities(module, statePtr, dim), backend: 'cpu' };
   } finally {
     freeState(module, statePtr);
+  }
+};
+
+// Same reset-once-and-retry robustness as runCircuitCpu -- see its comment.
+const probabilitiesFromAmplitudesCpu = async (payload) => {
+  let module = await getModule();
+  try {
+    return probabilitiesFromAmplitudesCpuOnce(module, payload);
+  } catch (err) {
+    if (!isFatalWasmRuntimeError(err)) throw err;
+    resetModuleAfterCpuFault('probabilitiesFromAmplitudesCpu', err);
+    module = await getModule();
+    return probabilitiesFromAmplitudesCpuOnce(module, payload);
   }
 };
 
@@ -862,38 +983,36 @@ const probabilitiesFromAmplitudesGpu = (module, payload) => {
   if (!amplitudesBuffer) return null;
 
   try {
+    // As in runCircuitGpu: past this point a real buffer readback has been
+    // issued, so any failure means the module can no longer be trusted for a
+    // same-instance CPU fallback and must throw (not return null) so the
+    // caller discards/reinitializes the module before falling back.
     let probabilities;
     try {
       probabilities = gpuComputeProbabilities(module, session.ctxPtr, amplitudesBuffer, dim);
     } catch (err) {
-      noteGpuProbabilityFailure(
-        `probabilitiesFromAmplitudes exception: ${err instanceof Error ? err.message : String(err)}`
-      );
-      // See runCircuitGpu: a thrown probability-kernel error can leave the
-      // shared heap corrupted, tripping an unrelated trap on the very next
-      // CPU-path call against this module. Reset before falling back.
-      resetModuleAfterFatalGpuRuntime('probabilitiesFromAmplitudes gpu probability exception', err);
-      return null;
+      const message = `probabilitiesFromAmplitudes exception: ${describeError(err)}`;
+      noteGpuProbabilityFailure(message);
+      throw new GpuReadbackFailure(message);
     }
     const validation = isProbabilityDistributionValid(probabilities, expectedMass);
     if (!validation.ok) {
-      const validationError = new Error(
-        `probabilitiesFromAmplitudes invalid output (sum=${validation.total.toExponential(
-          3
-        )}, max=${validation.max.toExponential(3)})`
-      );
-      noteGpuProbabilityFailure(validationError.message);
-      // Same rationale: an invalid (all-zero/garbage) distribution has been
-      // observed to precede heap corruption for the next CPU-path call.
-      resetModuleAfterFatalGpuRuntime('probabilitiesFromAmplitudes gpu invalid probability output', validationError);
-      return null;
+      const message = `probabilitiesFromAmplitudes invalid output (sum=${validation.total.toExponential(
+        3
+      )}, max=${validation.max.toExponential(3)})`;
+      noteGpuProbabilityFailure(message);
+      throw new GpuReadbackFailure(message);
     }
     return {
       probabilities,
       backend: 'webgpu',
     };
   } finally {
-    module._gpu_buffer_free(amplitudesBuffer);
+    try {
+      module._gpu_buffer_free(amplitudesBuffer);
+    } catch (_err) {
+      // The module may already be unsafe/about to be discarded; ignore.
+    }
   }
 };
 
@@ -905,12 +1024,7 @@ const probabilitiesFromAmplitudes = async (payload) => {
       return gpuResult;
     }
   } catch (err) {
-    noteGpuProbabilityFailure(`probabilitiesFromAmplitudes exception: ${describeError(err)}`);
-    if (isFatalWasmRuntimeError(err)) {
-      resetModuleAfterFatalGpuRuntime('probabilitiesFromAmplitudes', err);
-    } else {
-      disableGpuPathForModule(module, 'disabled-after-probabilities-error');
-    }
+    recoverModuleAfterGpuFailure('probabilitiesFromAmplitudes', err);
   }
   return probabilitiesFromAmplitudesCpu(payload);
 };
