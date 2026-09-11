@@ -772,11 +772,18 @@ jobs:
 
             ```bash
             brew tap tsotchke/moonlab
-            brew install moonlab
+            brew trust tsotchke/moonlab
+            brew install tsotchke/moonlab/moonlab
             pip install moonlab
             npm install @tsotchkecorp/moonlab
             cargo install moonlab-tui
             ```
+
+            Homebrew 6 requires trusting third-party taps, so `brew trust`
+            must run before `brew install` (older Homebrew without the `trust`
+            command can skip that step). `cargo install moonlab-tui` needs the
+            native SDK from Homebrew above (or a downloaded release archive)
+            installed first.
 
             Native archives cover Linux, macOS, and Windows on x64 and ARM64.
             `SHA256SUMS` authenticates every attached release artifact.

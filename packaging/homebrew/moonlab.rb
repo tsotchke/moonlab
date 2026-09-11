@@ -6,7 +6,8 @@
 #
 # Usage:
 #   brew tap tsotchke/moonlab
-#   brew install moonlab
+#   brew trust tsotchke/moonlab   # Homebrew 6 requires trusting third-party taps
+#   brew install tsotchke/moonlab/moonlab
 #
 class Moonlab < Formula
   desc "High-performance quantum computing simulator with GPU acceleration"

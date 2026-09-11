@@ -310,7 +310,8 @@ installs are:
 ```bash
 # Homebrew tap (repository: https://github.com/tsotchke/homebrew-moonlab)
 brew tap tsotchke/moonlab
-brew install moonlab
+brew trust tsotchke/moonlab
+brew install tsotchke/moonlab/moonlab
 
 # Self-contained Python wheel
 pip install moonlab
@@ -318,11 +319,14 @@ pip install moonlab
 # JavaScript/WebAssembly core
 npm install @tsotchkecorp/moonlab
 
-# Rust TUI (the Homebrew SDK supplies the native library)
+# Rust TUI (needs the Homebrew SDK installed above, or the native SDK archive, first)
 cargo install moonlab-tui
 ```
 
-The Homebrew tap setup is a one-time command. Formula updates are performed by
+Homebrew 6 requires trusting third-party taps before it will load their
+formulae, so `brew trust tsotchke/moonlab` must run once before the first
+install; on Homebrew versions that predate the `trust` command, skip that
+step. Tap and trust are one-time commands. Formula updates are performed by
 the release workflow only after building and testing the formula from source.
 
 ```bash
