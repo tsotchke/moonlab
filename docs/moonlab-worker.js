@@ -767,13 +767,25 @@ const runCircuitGpu = (module, payload) => {
       probabilities = gpuComputeProbabilities(module, session.ctxPtr, amplitudesBuffer, dim);
     } catch (err) {
       noteGpuProbabilityFailure(`runCircuit exception: ${err instanceof Error ? err.message : String(err)}`);
+      // A thrown error out of the WASM probability kernel can leave the
+      // shared linear memory corrupted (observed: a later, unrelated CPU
+      // fallback call traps with "unreachable" against the same heap).
+      // Discard the whole module instance so the CPU fallback below runs
+      // against a guaranteed-clean heap instead of a possibly-poisoned one.
+      resetModuleAfterFatalGpuRuntime('runCircuit gpu probability exception', err);
       return null;
     }
     const validation = isProbabilityDistributionValid(probabilities, expectedMass);
     if (!validation.ok) {
-      noteGpuProbabilityFailure(
+      const validationError = new Error(
         `runCircuit invalid output (sum=${validation.total.toExponential(3)}, max=${validation.max.toExponential(3)})`
       );
+      noteGpuProbabilityFailure(validationError.message);
+      // Same rationale as above: an invalid (all-zero/garbage) distribution
+      // from the GPU kernel has been observed to precede a heap-corruption
+      // trap in the very next CPU-path call on this module instance. Reset
+      // proactively rather than let the CPU fallback inherit a poisoned heap.
+      resetModuleAfterFatalGpuRuntime('runCircuit gpu invalid probability output', validationError);
       return null;
     }
     return {
@@ -857,15 +869,23 @@ const probabilitiesFromAmplitudesGpu = (module, payload) => {
       noteGpuProbabilityFailure(
         `probabilitiesFromAmplitudes exception: ${err instanceof Error ? err.message : String(err)}`
       );
+      // See runCircuitGpu: a thrown probability-kernel error can leave the
+      // shared heap corrupted, tripping an unrelated trap on the very next
+      // CPU-path call against this module. Reset before falling back.
+      resetModuleAfterFatalGpuRuntime('probabilitiesFromAmplitudes gpu probability exception', err);
       return null;
     }
     const validation = isProbabilityDistributionValid(probabilities, expectedMass);
     if (!validation.ok) {
-      noteGpuProbabilityFailure(
+      const validationError = new Error(
         `probabilitiesFromAmplitudes invalid output (sum=${validation.total.toExponential(
           3
         )}, max=${validation.max.toExponential(3)})`
       );
+      noteGpuProbabilityFailure(validationError.message);
+      // Same rationale: an invalid (all-zero/garbage) distribution has been
+      // observed to precede heap corruption for the next CPU-path call.
+      resetModuleAfterFatalGpuRuntime('probabilitiesFromAmplitudes gpu invalid probability output', validationError);
       return null;
     }
     return {
