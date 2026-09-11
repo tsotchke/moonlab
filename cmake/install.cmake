@@ -20,6 +20,39 @@ else()
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
+# Regression guard for the moonlab-control-server rpath defect (Homebrew
+# moonlab 1.2.1 shipped this binary with no LC_RPATH at all, so dyld could
+# not resolve @rpath/libquantumsim.*.dylib and the daemon refused to start
+# except under DYLD_LIBRARY_PATH set by hand). The fix is the INSTALL_RPATH
+# target property set on moonlab-control-server in CMakeLists.txt; this
+# check verifies the installed binary actually carries it, so a future
+# change that silently drops that property fails the install instead of
+# quietly shipping a broken package again.
+if(QSIM_PLATFORM_MACOS AND QSIM_ENABLE_CONTROL_PLANE AND NOT QSIM_PYTHON_WHEEL
+        AND TARGET moonlab-control-server)
+    install(CODE "
+        set(_qsim_server \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/moonlab-control-server\")
+        if(EXISTS \"\${_qsim_server}\")
+            execute_process(
+                COMMAND otool -l \"\${_qsim_server}\"
+                OUTPUT_VARIABLE _qsim_server_loadcmds
+                RESULT_VARIABLE _qsim_server_otool_rc)
+            if(NOT _qsim_server_otool_rc EQUAL 0)
+                message(FATAL_ERROR
+                    \"otool -l failed on the installed moonlab-control-server\")
+            endif()
+            if(NOT _qsim_server_loadcmds MATCHES \"LC_RPATH\")
+                message(FATAL_ERROR
+                    \"moonlab-control-server was installed with no LC_RPATH; \"
+                    \"it will fail to load libquantumsim at runtime unless \"
+                    \"DYLD_LIBRARY_PATH is set by hand. Check the \"
+                    \"INSTALL_RPATH target property set on \"
+                    \"moonlab-control-server in CMakeLists.txt.\")
+            endif()
+        endif()"
+        COMPONENT native-sdk)
+endif()
+
 # macOS OpenMP coexistence (issue #27): the build-tree dylib references
 # Homebrew libomp by absolute path (its install name), which is correct on
 # the build machine but must not ship -- a consumer process carrying its

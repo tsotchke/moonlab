@@ -1248,6 +1248,28 @@ endif()
 if(QSIM_ENABLE_CONTROL_PLANE)
     # Wire the production control-plane daemon binary to quantumsim.
     target_link_libraries(moonlab-control-server PRIVATE quantumsim ${MATH_LIBRARY} Threads::Threads)
+
+    # The daemon links libquantumsim via an @rpath (macOS) / SONAME (Linux)
+    # reference and CMake does not add an install rpath to an executable
+    # target by default, so without the properties below the installed
+    # binary carries no LC_RPATH at all: dyld/ld.so cannot resolve
+    # libquantumsim and the daemon only starts under
+    # DYLD_LIBRARY_PATH/LD_LIBRARY_PATH set by hand. That is exactly what
+    # Homebrew-installed moonlab-control-server did (moonlab 1.2.1: "no
+    # LC_RPATH's found"). BUILD_WITH_INSTALL_RPATH is left at its CMake
+    # default (OFF) so the build-tree binary keeps resolving quantumsim
+    # from the build tree; the loader-relative INSTALL_RPATH below only
+    # takes effect on the copy `cmake --install` places under
+    # CMAKE_INSTALL_PREFIX/bin, so it is correct for any install prefix
+    # (Homebrew keg, /usr/local, a packaging DESTDIR, ...).
+    if(QSIM_PLATFORM_MACOS)
+        set_target_properties(moonlab-control-server PROPERTIES
+            INSTALL_RPATH "@loader_path/../lib")
+    elseif(QSIM_PLATFORM_LINUX)
+        set_target_properties(moonlab-control-server PROPERTIES
+            INSTALL_RPATH "$ORIGIN/../lib")
+    endif()
+
     install(TARGETS moonlab-control-server RUNTIME DESTINATION bin)
 endif()
 

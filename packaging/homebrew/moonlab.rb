@@ -15,6 +15,7 @@ class Moonlab < Formula
   url "https://github.com/tsotchke/moonlab/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
+  revision 1
   head "https://github.com/tsotchke/moonlab.git", branch: "main"
 
   depends_on "cmake" => :build
@@ -44,6 +45,16 @@ class Moonlab < Formula
     # rpaths only; the keg pins libomp's opt path explicitly so brewed
     # artifacts resolve the runtime without a consumer-side rpath.
     args << "-DQSIM_EXTRA_RPATH=#{libomp.opt_lib}" if OS.mac?
+
+    # moonlab-control-server installed with no LC_RPATH at all on 1.2.1
+    # (that release predates the upstream target-level INSTALL_RPATH fix
+    # on the control-server target), so dyld/ld.so could not resolve
+    # libquantumsim and the daemon refused to start except under
+    # DYLD_LIBRARY_PATH/LD_LIBRARY_PATH set by hand. CMAKE_INSTALL_RPATH
+    # becomes the default INSTALL_RPATH for any target that does not set
+    # its own, so pinning it at the keg's lib directory here fixes every
+    # installed executable, including ones a future source tree adds.
+    args << "-DCMAKE_INSTALL_RPATH=#{lib}"
 
     ENV.append "LDFLAGS", "-L#{libomp.opt_lib}"
     ENV.append "CPPFLAGS", "-I#{libomp.opt_include}"
@@ -98,5 +109,13 @@ class Moonlab < Formula
     ENV.prepend_path "DYLD_LIBRARY_PATH", lib.to_s if OS.mac?
     ENV.prepend_path "LD_LIBRARY_PATH", lib.to_s if OS.linux?
     system "./consumer"
+
+    # Regression test for the moonlab-control-server rpath defect: the
+    # installed daemon must start on its own, with neither
+    # DYLD_LIBRARY_PATH nor LD_LIBRARY_PATH pointed at the keg's lib
+    # directory. Clear both, since the consumer test above set them.
+    ENV.delete "DYLD_LIBRARY_PATH"
+    ENV.delete "LD_LIBRARY_PATH"
+    assert_match "moonlab-control-server", shell_output("#{bin}/moonlab-control-server --help 2>&1")
   end
 end
