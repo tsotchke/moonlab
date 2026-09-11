@@ -132,16 +132,26 @@ int chern_build_projector(chern_system_t* sys) {
      * Y_0 = H / B where B > ||H||_2. This converges quadratically
      * provided spec(H) avoids 0 (the band gap guarantees this). */
 
-    /* Spectral bound: sum of |m| + 2 bounds ||H||_2 for QWZ; use
-     * Frobenius norm as a generic safe overestimate so this works
-     * for other models too. Frobenius >= 2-norm always. */
-    double fnorm2 = 0.0;
-    for (size_t i = 0; i < N * N; i++) {
-        double re = creal(sys->H[i]);
-        double im = cimag(sys->H[i]);
-        fnorm2 += re * re + im * im;
+    /* Spectral bound: ||H||_2 <= ||H||_1 = max_j sum_i |H_ij|.
+     * For Hermitian H, the induced 1-norm equals the infinity-norm and
+     * strictly bounds the spectral radius (2-norm). Unlike the Frobenius
+     * norm which scales as O(sqrt(N)) and unnecessarily compresses the
+     * spectrum into the origin (costing extra Schulz iterations to expand),
+     * the induced 1-norm is scale-invariant and tight for sparse/local
+     * Hamiltonians. */
+    double max_col_sum = 0.0;
+    for (size_t j = 0; j < N; j++) {
+        double col_sum = 0.0;
+        for (size_t i = 0; i < N; i++) {
+            double re = creal(sys->H[i * N + j]);
+            double im = cimag(sys->H[i * N + j]);
+            col_sum += sqrt(re * re + im * im);
+        }
+        if (col_sum > max_col_sum) {
+            max_col_sum = col_sum;
+        }
     }
-    double B = sqrt(fnorm2) + 1e-3;
+    double B = max_col_sum + 1e-3;
 
     cm_complex_t* Y  = malloc(N * N * sizeof(cm_complex_t));
     cm_complex_t* Y2 = malloc(N * N * sizeof(cm_complex_t));
