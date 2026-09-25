@@ -9,12 +9,14 @@
  * Random X-error model: each data qubit gets an X with probability
  * p, independently.  After error injection we compute the Z-vertex
  * syndrome, hand it to each decoder, apply the proposed correction,
- * and check whether the leftover X-pattern has odd parity around
- * the logical-Z_1 loop (X on column 0).  Each (p, decoder, trial)
- * is one Monte-Carlo sample.
+ * and count a logical failure when the leftover X-pattern still has a
+ * syndrome or anticommutes with either logical Z (see
+ * decoder_shootout_toric.h).  Each (p, decoder, trial) is one
+ * Monte-Carlo sample.
  */
 
 #include "../src/applications/decoder_bench.h"
+#include "decoder_shootout_toric.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -31,37 +33,6 @@ static uint64_t xorshift64(uint64_t *s) {
 
 static double uniform01(uint64_t *s) {
     return (double)(xorshift64(s) >> 11) / (double)(1ULL << 53);
-}
-
-/* Toric d x d, num_qubits = 2*d*d.  Horizontal edge (x, y) at
- * index x*d+y; vertical edge (x, y) at d*d+x*d+y. */
-static inline int h_idx(int d, int x, int y) { return x * d + y; }
-static inline int v_idx(int d, int x, int y) { return d * d + x * d + y; }
-
-/* Compute the Z-vertex syndrome from the X-error pattern.  Vertex
- * (vx, vy) is flagged if the four incident edges have odd parity:
- * horizontal h(vx-1, vy) + h(vx, vy) + vertical v(vx, vy-1) + v(vx, vy). */
-static void compute_syndrome(int d, const unsigned char *x_err,
-                              unsigned char *syndromes) {
-    for (int vx = 0; vx < d; vx++) {
-        for (int vy = 0; vy < d; vy++) {
-            int p = 0;
-            p ^= x_err[h_idx(d, (vx + d - 1) % d, vy)];
-            p ^= x_err[h_idx(d, vx, vy)];
-            p ^= x_err[v_idx(d, vx, (vy + d - 1) % d)];
-            p ^= x_err[v_idx(d, vx, vy)];
-            syndromes[vx * d + vy] = (unsigned char)(p & 1);
-        }
-    }
-}
-
-/* Logical-Z_1 = Z on column 0 horizontal edges {h(x, 0) : x in [0, d)}.
- * A residual X-pattern causes a logical fault iff its support has
- * odd intersection with that column. */
-static int logical_failure(int d, const unsigned char *x_err) {
-    int p = 0;
-    for (int x = 0; x < d; x++) p ^= x_err[h_idx(d, x, 0)];
-    return p & 1;
 }
 
 static double estimate_rate(moonlab_decoder_kind_t slot,
