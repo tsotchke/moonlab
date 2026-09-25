@@ -629,13 +629,15 @@ ca_mps_error_t moonlab_ca_mps_crx(moonlab_ca_mps_t* s,
 
 ca_mps_error_t moonlab_ca_mps_cry(moonlab_ca_mps_t* s,
                                    uint32_t c, uint32_t t, double theta) {
-    /* CRY = S_t . CRX . S^dag_t  (since S X S^dag = Y -> S R_X S^dag = R_Y). */
+    /* CRY = S_t . CRX . S^dag_t  (since S X S^dag = Y -> S R_X S^dag = R_Y).
+     * The rightmost factor acts first, so S^dag is applied before CRX;
+     * applying S first gives S^dag . CRX . S = CRY(-theta). */
     if (!s) return CA_MPS_ERR_INVALID;
     if (c == t) return CA_MPS_ERR_INVALID;
     ca_mps_error_t e;
-    if ((e = moonlab_ca_mps_s(s, t))               != CA_MPS_SUCCESS) return e;
-    if ((e = moonlab_ca_mps_crx(s, c, t, theta))   != CA_MPS_SUCCESS) return e;
     if ((e = moonlab_ca_mps_sdag(s, t))            != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_crx(s, c, t, theta))   != CA_MPS_SUCCESS) return e;
+    if ((e = moonlab_ca_mps_s(s, t))               != CA_MPS_SUCCESS) return e;
     return CA_MPS_SUCCESS;
 }
 

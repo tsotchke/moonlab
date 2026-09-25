@@ -30,6 +30,45 @@ static double sv_prob_z(const quantum_state_t* sv, int q) {
     return p0;
 }
 
+/* In the mixed circuit below, the CRY control (qubit 2) is still |0>
+ * when CRY runs, so the gate is the identity for either sign of theta.
+ * Drive it with the control in |1> and the target in |+>, where
+ * P(Z_t = +1) = (1 - sin theta) / 2 is odd in theta. */
+static void check_cry_active_control(void) {
+    const double thetas[] = {1.0, -0.6, 0.25, 2.5};
+    for (size_t k = 0; k < sizeof(thetas) / sizeof(thetas[0]); k++) {
+        const double theta = thetas[k];
+        moonlab_ca_mps_t* ca = moonlab_ca_mps_create(2, 4);
+        quantum_state_t*  sv = quantum_state_create(2);
+        if (!ca || !sv) {
+            fprintf(stderr, "FAIL alloc (CRY check)\n");
+            failures++;
+            moonlab_ca_mps_free(ca); quantum_state_free(sv);
+            return;
+        }
+        moonlab_ca_mps_x(ca, 0);            gate_pauli_x(sv, 0);
+        moonlab_ca_mps_h(ca, 1);            gate_hadamard(sv, 1);
+        moonlab_ca_mps_cry(ca, 0, 1, theta); gate_cry(sv, 0, 1, theta);
+
+        const double exact = 0.5 * (1.0 - sin(theta));
+        const double psv = sv_prob_z(sv, 1);
+        double pca = -1.0;
+        ca_mps_error_t e = moonlab_ca_mps_prob_z(ca, 1, &pca);
+        if (e != CA_MPS_SUCCESS || fabs(pca - exact) > 1e-12 ||
+            fabs(psv - exact) > 1e-12) {
+            fprintf(stderr, "FAIL  CRY(%.2f) |1>|+>: CA=%.12f  SV=%.12f  "
+                            "exact=%.12f  (err %d)\n",
+                    theta, pca, psv, exact, e);
+            failures++;
+        } else {
+            fprintf(stdout, "  OK  CRY(%.2f) |1>|+>  P(Z_t=+1)=%.6f\n",
+                    theta, pca);
+        }
+        moonlab_ca_mps_free(ca);
+        quantum_state_free(sv);
+    }
+}
+
 int main(void) {
     const uint32_t n = 4;
     moonlab_ca_mps_t* ca = moonlab_ca_mps_create(n, 16);
@@ -75,6 +114,7 @@ int main(void) {
     }
     moonlab_ca_mps_free(ca);
     quantum_state_free(sv);
+    check_cry_active_control();
     fprintf(stdout, "\n=== %d failure%s ===\n", failures, failures == 1 ? "" : "s");
     return failures == 0 ? 0 : 1;
 }
