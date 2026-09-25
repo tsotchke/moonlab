@@ -216,8 +216,12 @@ tn_measure_error_t tn_measure_probability(const tn_mps_state_t *state,
         if (left_env == NULL) {
             left_env = local;
         } else {
-            // Contract with existing left environment
+            // Contract with existing left environment.  The single-site
+            // env is [l, r, l', r'], but every merged env is
+            // [l, l', r, r'], so after the first merge (i >= 2) the
+            // right bonds sit at axes 2 and 3.
             uint32_t axes_env[2] = {1, 3};  // right bonds of env
+            if (i >= 2) { axes_env[0] = 2; axes_env[1] = 3; }
             uint32_t axes_loc[2] = {0, 2};  // left bonds of local
             tensor_t *new_env = tensor_contract(left_env, local, axes_env, axes_loc, 2);
             tensor_free(left_env);
@@ -253,7 +257,11 @@ tn_measure_error_t tn_measure_probability(const tn_mps_state_t *state,
         if (right_env == NULL) {
             right_env = local;
         } else {
+            // Mirror of the left side: a merged env is [l, l', r, r'],
+            // so after the first merge (i <= n-3) the left bonds sit
+            // at axes 0 and 1.
             uint32_t axes_env[2] = {0, 2};  // left bonds of env
+            if (i <= (int)state->num_qubits - 3) { axes_env[0] = 0; axes_env[1] = 1; }
             uint32_t axes_loc[2] = {1, 3};  // right bonds of local
             tensor_t *new_env = tensor_contract(local, right_env, axes_loc, axes_env, 2);
             tensor_free(right_env);
@@ -1807,7 +1815,9 @@ tn_measure_error_t tn_reduced_density_1q(const tn_mps_state_t *state,
         if (left_env == NULL) {
             left_env = local;
         } else {
+            // Same env layouts as tn_measure_probability.
             uint32_t axes_env[2] = {1, 3};
+            if (i >= 2) { axes_env[0] = 2; axes_env[1] = 3; }
             uint32_t axes_loc[2] = {0, 2};
             tensor_t *new_env = tensor_contract(left_env, local, axes_env, axes_loc, 2);
             tensor_free(left_env);
@@ -1844,6 +1854,7 @@ tn_measure_error_t tn_reduced_density_1q(const tn_mps_state_t *state,
             right_env = local;
         } else {
             uint32_t axes_env[2] = {0, 2};
+            if (i <= (int)state->num_qubits - 3) { axes_env[0] = 0; axes_env[1] = 1; }
             uint32_t axes_loc[2] = {1, 3};
             tensor_t *new_env = tensor_contract(local, right_env, axes_loc, axes_env, 2);
             tensor_free(right_env);
@@ -1874,22 +1885,11 @@ tn_measure_error_t tn_reduced_density_1q(const tn_mps_state_t *state,
                     // Get left environment contribution
                     double complex left_val = 1.0;
                     if (left_env && left_env->total_size > 1) {
-                        // left_env is [l, r_internal, l', r_internal']
-                        // For contracted form, it should be [l, l']
-                        if (left_env->rank == 2) {
-                            left_val = left_env->data[l * left_dim + lp];
-                        } else if (left_env->rank == 4) {
-                            // Take trace over internal indices
-                            double complex sum = 0.0;
-                            uint32_t int_dim = left_env->dims[1];
-                            for (uint32_t ri = 0; ri < int_dim; ri++) {
-                                uint32_t idx = l * left_env->dims[1] * left_env->dims[2] * left_env->dims[3]
-                                             + ri * left_env->dims[2] * left_env->dims[3]
-                                             + lp * left_env->dims[3] + ri;
-                                if (idx < left_env->total_size) sum += left_env->data[idx];
-                            }
-                            left_val = sum;
-                        }
+                        // left_env is [1, chi, 1, chi] (one site) or
+                        // [1, 1, chi, chi] (merged): its boundary axes
+                        // have size 1, so row-major storage is the
+                        // chi x chi matrix env[l, l'] either way.
+                        left_val = left_env->data[l * left_dim + lp];
                     } else if (left_env && l == 0 && lp == 0) {
                         left_val = left_env->data[0];
                     } else if (!left_env && l == 0 && lp == 0) {
@@ -1903,19 +1903,10 @@ tn_measure_error_t tn_reduced_density_1q(const tn_mps_state_t *state,
                             // Get right environment contribution
                             double complex right_val = 1.0;
                             if (right_env && right_env->total_size > 1) {
-                                if (right_env->rank == 2) {
-                                    right_val = right_env->data[r * right_dim + rp];
-                                } else if (right_env->rank == 4) {
-                                    double complex sum = 0.0;
-                                    uint32_t int_dim = right_env->dims[1];
-                                    for (uint32_t li = 0; li < int_dim; li++) {
-                                        uint32_t idx = r * right_env->dims[1] * right_env->dims[2] * right_env->dims[3]
-                                                     + li * right_env->dims[2] * right_env->dims[3]
-                                                     + rp * right_env->dims[3] + li;
-                                        if (idx < right_env->total_size) sum += right_env->data[idx];
-                                    }
-                                    right_val = sum;
-                                }
+                                // right_env is [chi, 1, chi, 1] (one site)
+                                // or [chi, chi, 1, 1] (merged): row-major
+                                // storage is env[r, r'] either way.
+                                right_val = right_env->data[r * right_dim + rp];
                             } else if (right_env && r == 0 && rp == 0) {
                                 right_val = right_env->data[0];
                             } else if (!right_env && r == 0 && rp == 0) {

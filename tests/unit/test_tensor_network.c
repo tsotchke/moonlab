@@ -536,6 +536,99 @@ static int test_measurement_sampling(void) {
     return 1;
 }
 
+/* tn_measure_probability and tn_reduced_density_1q build their left and
+ * right environments by merging one site at a time.  A bond-1 product
+ * state cannot tell a wrong merge axis from a right one, and n <= 3
+ * never merges twice on one side, so exercise entangled states with
+ * n >= 4 (GHZ_4 used to give P(1) = 0 on qubits 0 and 3). */
+static int test_measurement_ghz_marginals(void) {
+    tn_state_config_t config = tn_state_config_create(32, 1e-12);
+
+    for (uint32_t n = 3; n <= 6; n++) {
+        tn_mps_state_t *mps = tn_mps_create_zero(n, &config);
+        TEST_ASSERT(mps != NULL, "tn_mps_create_zero failed");
+        tn_apply_h(mps, 0);
+        for (uint32_t q = 0; q + 1 < n; q++) tn_apply_cnot(mps, q, q + 1);
+
+        for (uint32_t q = 0; q < n; q++) {
+            double p0 = -1.0, p1 = -1.0;
+            TEST_ASSERT(tn_measure_probability(mps, q, &p0, &p1) == TN_MEASURE_SUCCESS,
+                        "tn_measure_probability failed on GHZ");
+            TEST_ASSERT_NEAR(p0, 0.5, 1e-10, "GHZ P(0) wrong");
+            TEST_ASSERT_NEAR(p1, 0.5, 1e-10, "GHZ P(1) wrong");
+
+            double complex rho[4];
+            TEST_ASSERT(tn_reduced_density_1q(mps, q, rho) == TN_MEASURE_SUCCESS,
+                        "tn_reduced_density_1q failed on GHZ");
+            TEST_ASSERT_COMPLEX_NEAR(rho[0], 0.5, 1e-10, "GHZ rho[0][0] wrong");
+            TEST_ASSERT_COMPLEX_NEAR(rho[1], 0.0, 1e-10, "GHZ rho[0][1] wrong");
+            TEST_ASSERT_COMPLEX_NEAR(rho[2], 0.0, 1e-10, "GHZ rho[1][0] wrong");
+            TEST_ASSERT_COMPLEX_NEAR(rho[3], 0.5, 1e-10, "GHZ rho[1][1] wrong");
+        }
+
+        uint64_t samples[32];
+        TEST_ASSERT(tn_sample_auto(mps, 32, samples, 12345, NULL) == TN_MEASURE_SUCCESS,
+                    "tn_sample_auto failed on GHZ");
+        const uint64_t ones = (1ULL << n) - 1;
+        for (int s = 0; s < 32; s++) {
+            TEST_ASSERT(samples[s] == 0 || samples[s] == ones,
+                        "GHZ sample is not 0...0 or 1...1");
+        }
+        tn_mps_free(mps);
+    }
+    return 1;
+}
+
+/* Same paths on a state with no symmetry to hide behind: every qubit
+ * marginal and every 1-qubit reduced density matrix (off-diagonals
+ * included) against the dense state vector.  MPS basis indices are
+ * MSB-first, so qubit q is bit (n - 1 - q). */
+static int test_measurement_marginals_vs_statevector(void) {
+    const uint32_t n = 5;
+    tn_state_config_t config = tn_state_config_create(32, 1e-12);
+    tn_mps_state_t *mps = tn_mps_create_zero(n, &config);
+    TEST_ASSERT(mps != NULL, "tn_mps_create_zero failed");
+    for (uint32_t q = 0; q < n; q++) tn_apply_ry(mps, q, 0.3 + 0.37 * q);
+    for (uint32_t q = 0; q + 1 < n; q++) tn_apply_cnot(mps, q, q + 1);
+    for (uint32_t q = 0; q < n; q++) tn_apply_rx(mps, q, 0.9 - 0.21 * q);
+    tn_apply_cnot(mps, 3, 4);
+    tn_apply_cnot(mps, 1, 2);
+
+    double complex psi[32];
+    TEST_ASSERT(tn_mps_to_statevector(mps, psi) == TN_STATE_SUCCESS,
+                "tn_mps_to_statevector failed");
+
+    for (uint32_t q = 0; q < n; q++) {
+        const uint64_t bit = 1ULL << (n - 1 - q);
+        double complex ref[4] = {0, 0, 0, 0};
+        for (uint64_t k = 0; k < 32; k++) {
+            if (k & bit) continue;
+            const double complex a0 = psi[k], a1 = psi[k | bit];
+            ref[0] += a0 * conj(a0);
+            ref[1] += a0 * conj(a1);
+            ref[2] += a1 * conj(a0);
+            ref[3] += a1 * conj(a1);
+        }
+
+        double p0 = -1.0, p1 = -1.0;
+        TEST_ASSERT(tn_measure_probability(mps, q, &p0, &p1) == TN_MEASURE_SUCCESS,
+                    "tn_measure_probability failed");
+        TEST_ASSERT_NEAR(p0, creal(ref[0]), 1e-10, "P(0) disagrees with state vector");
+        TEST_ASSERT_NEAR(p1, creal(ref[3]), 1e-10, "P(1) disagrees with state vector");
+
+        double complex rho[4];
+        TEST_ASSERT(tn_reduced_density_1q(mps, q, rho) == TN_MEASURE_SUCCESS,
+                    "tn_reduced_density_1q failed");
+        for (int e = 0; e < 4; e++) {
+            TEST_ASSERT_COMPLEX_NEAR(rho[e], ref[e], 1e-10,
+                                     "rho disagrees with state vector");
+        }
+    }
+
+    tn_mps_free(mps);
+    return 1;
+}
+
 // =============================================================================
 // EXPECTATION VALUE TESTS
 // =============================================================================
@@ -794,6 +887,8 @@ int main(void) {
     RUN_TEST(test_measurement_probability);
     RUN_TEST(test_measurement_projective);
     RUN_TEST(test_measurement_sampling);
+    RUN_TEST(test_measurement_ghz_marginals);
+    RUN_TEST(test_measurement_marginals_vs_statevector);
 
     printf("\n=== Expectation Values ===\n");
     RUN_TEST(test_expectation_pauli_z);
