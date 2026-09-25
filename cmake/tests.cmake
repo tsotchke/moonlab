@@ -1188,6 +1188,17 @@
         TIMEOUT 30
     )
 
+    # Logical-failure check used by benchmarks/decoder_shootout.c:
+    # stabilizer residuals must not count, logical residuals must.
+    add_executable(test_decoder_shootout_logical
+        tests/unit/test_decoder_shootout_logical.c)
+    target_link_libraries(test_decoder_shootout_logical PRIVATE quantumsim ${MATH_LIBRARY})
+    add_test(NAME unit_decoder_shootout_logical COMMAND test_decoder_shootout_logical)
+    set_tests_properties(unit_decoder_shootout_logical PROPERTIES
+        LABELS "qec"
+        TIMEOUT 60
+    )
+
     # Distributed scheduler MVP (since v0.7.0).  In-process worker
     # fan-out atop the QGTL ingestion surface.  Bell + GHZ verified
     # across 3 / 4 workers.
