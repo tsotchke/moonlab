@@ -93,7 +93,13 @@ EM_JS(int, moonlab_webgpu_tn_native_dispatch_supported, (), {
     }
 });
 
-EM_ASYNC_JS(int, moonlab_webgpu_init_async, (), {
+/* A plain JS function returning a Promise, not EM_ASYNC_JS: only the dispatch
+ * bodies below call it (from JS, by this name), and Emscripten emits EM_ASYNC_JS
+ * functions as __asyncjs__<name> behind Asyncify.handleAsync, so the C name was
+ * undefined there (ReferenceError -> every dispatch silently fell back to the
+ * CPU path) and a nested handleAsync would corrupt the Asyncify state anyway. */
+EM_JS(int, moonlab_webgpu_init_async, (), {
+  return (async () => {
     try {
         if (typeof navigator === 'undefined' || !navigator.gpu) {
             return 0;
@@ -117,6 +123,7 @@ EM_ASYNC_JS(int, moonlab_webgpu_init_async, (), {
             state.initPromise = (async () => {
                 const adapter = await navigator.gpu.requestAdapter();
                 if (!adapter) {
+                    state.lastInitError = 'navigator.gpu.requestAdapter() returned null';
                     return 0;
                 }
 
@@ -265,7 +272,7 @@ fn swap_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct CzParams {
   control: u32,
-  target: u32,
+  target_qubit: u32,
   state_dim: u32,
   _pad0: u32,
 };
@@ -282,7 +289,7 @@ fn cz_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let bit_c = (i >> cz_params.control) & 1u;
-  let bit_t = (i >> cz_params.target) & 1u;
+  let bit_t = (i >> cz_params.target_qubit) & 1u;
   var v = cz_src[i];
   if (bit_c == 1u && bit_t == 1u) {
     v = -v;
@@ -292,7 +299,7 @@ fn cz_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct CnotParams {
   control: u32,
-  target: u32,
+  target_qubit: u32,
   state_dim: u32,
   _pad0: u32,
 };
@@ -309,7 +316,7 @@ fn cnot_kernel(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
 
-  let target_stride = 1u << cnot_params.target;
+  let target_stride = 1u << cnot_params.target_qubit;
   let i0 = (pair_index / target_stride) * (2u * target_stride) + (pair_index % target_stride);
   let i1 = i0 + target_stride;
   if ((i0 & (1u << cnot_params.control)) != 0u) {
@@ -516,7 +523,7 @@ fn mps_expectation_z_canonical_kernel(@builtin(global_invocation_id) gid: vec3<u
                 state.mpsExpectationZCanonicalPipeline = mpsExpectationZCanonicalPipeline;
                 state.workgroupSize = 256;
                 return 1;
-            })().catch((_err) => 0);
+            })().catch((err) => { state.lastInitError = String((err && err.message) || err); return 0; });
         }
 
         const ok = await state.initPromise;
@@ -527,6 +534,7 @@ fn mps_expectation_z_canonical_kernel(@builtin(global_invocation_id) gid: vec3<u
     } catch (err) {
         return 0;
     }
+  })();
 });
 
 EM_ASYNC_JS(int, moonlab_webgpu_hadamard_dispatch_async,
@@ -603,8 +611,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_hadamard_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -683,8 +694,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_pauli_x_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -762,8 +776,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_pauli_z_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -842,8 +859,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_cnot_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -930,8 +950,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_rz_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -1009,8 +1032,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_cz_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -1088,8 +1114,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_swap_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -1172,8 +1201,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_probabilities_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -1265,8 +1297,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_mps_apply_gate_theta_dispatch_async,
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof gateBuf.destroy === 'function') gateBuf.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
@@ -1353,8 +1388,11 @@ EM_ASYNC_JS(int, moonlab_webgpu_mps_expectation_z_canonical_dispatch_async,
         if (typeof dst.destroy === 'function') dst.destroy();
         if (typeof readback.destroy === 'function') readback.destroy();
         if (typeof paramsBuf.destroy === 'function') paramsBuf.destroy();
+        Module.__moonlabWebGPU.nativeDispatches = (Module.__moonlabWebGPU.nativeDispatches || 0) + 1;
         return 1;
     } catch (err) {
+        const state = Module.__moonlabWebGPU || (Module.__moonlabWebGPU = {});
+        state.lastDispatchError = String((err && err.message) || err);
         return 0;
     }
 });
